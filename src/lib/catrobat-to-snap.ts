@@ -488,10 +488,10 @@ function hatBlock(script: Element, ctx: Ctx): string {
       return `<block s="receiveGo"/>`;
     case "WhenScript": {
       // action="Tapped" -> touching the screen == clicking with the mouse
-      return `<block s="receiveInteraction"><l><option>pressed</option></l></block>`;
+      return `<block s="receiveInteraction"><l><option>clicked</option></l></block>`;
     }
     case "WhenTouchDownScript":
-      return `<block s="receiveInteraction"><l><option>pressed</option></l></block>`;
+      return `<block s="receiveInteraction"><l><option>clicked</option></l></block>`;
     case "BroadcastScript":
       return `<block s="receiveMessage"><l>${esc(text(child(script, "receivedMessage")) || "message1")}</l></block>`;
     case "WhenConditionScript": {
