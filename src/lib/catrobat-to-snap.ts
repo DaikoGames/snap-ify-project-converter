@@ -254,7 +254,7 @@ function bricksToSnap(brickList: Element | null, ctx: Ctx): string {
   let i = 0;
 
   while (i < list.length) {
-    const b = list[i];
+    const b = list[i]!;
     const type = b.getAttribute("type") ?? b.tagName;
     ctx.count();
 
@@ -268,7 +268,8 @@ function bricksToSnap(brickList: Element | null, ctx: Ctx): string {
       let hasElse = false;
       i++;
       for (; i < list.length; i++) {
-        const t = list[i].getAttribute("type") ?? "";
+        const cur = list[i]!;
+        const t = cur.getAttribute("type") ?? "";
         if (t === "IfLogicBeginBrick" || t === "IfThenLogicBeginBrick") depth++;
         if (t === "IfLogicElseBrick" && depth === 0) {
           hasElse = true;
@@ -279,7 +280,7 @@ function bricksToSnap(brickList: Element | null, ctx: Ctx): string {
           if (depth === 0) break;
           depth--;
         }
-        bucket.push(list[i]);
+        bucket.push(cur);
       }
       i++;
       const wrap = (els: Element[]) => {
@@ -304,13 +305,14 @@ function bricksToSnap(brickList: Element | null, ctx: Ctx): string {
       let depth = 0;
       i++;
       for (; i < list.length; i++) {
-        const t = list[i].getAttribute("type") ?? "";
+        const cur = list[i]!;
+        const t = cur.getAttribute("type") ?? "";
         if (t === "ForeverBrick" || t === "RepeatBrick" || t === "RepeatUntilBrick") depth++;
         if (t === "LoopEndBrick" || t === "LoopEndlessBrick") {
           if (depth === 0) break;
           depth--;
         }
-        body.push(list[i]);
+        body.push(cur);
       }
       i++;
       const holder = b.ownerDocument.createElement("brickList");
