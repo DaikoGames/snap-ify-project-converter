@@ -15,11 +15,19 @@ export type ConversionLog = {
   unsupported: Record<string, number>;
 };
 
+export type MediaItem = { dataUrl: string; width?: number; height?: number };
+
+export type MediaBundle = {
+  images: Record<string, MediaItem>;
+  sounds: Record<string, MediaItem>;
+};
+
 export type ConversionResult = {
   xml: string;
   projectName: string;
   log: ConversionLog;
 };
+
 
 const esc = (s: string) =>
   String(s)
