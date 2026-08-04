@@ -626,9 +626,12 @@ export function convertCatrobatXml(
   }
 
   let scriptCount = 0;
+  let costumeCount = 0;
+  let soundCount = 0;
   const spriteXml: string[] = [];
   let idx = 1;
   let id = 10;
+  let mediaId = 5000;
 
   for (const obj of objects) {
     const name = obj.getAttribute("name") || refName(child(obj, "name")) || `Sprite${idx}`;
@@ -652,14 +655,62 @@ export function convertCatrobatXml(
       }
     }
 
+    // costumes (Catrobat "looks")
+    const costumesXml: string[] = [];
+    for (const look of children(child(obj, "lookList"), "look")) {
+      const lookName = look.getAttribute("name") || refName(look) || `costume${costumesXml.length + 1}`;
+      const fileName = look.getAttribute("fileName") || text(child(look, "fileName"));
+      const item = findMedia(media.images, fileName, lookName);
+      if (!item) {
+        if (fileName || lookName) ctx.warn(`Image "${fileName || lookName}" was not found in the archive.`);
+        continue;
+      }
+      const cx = (item.width ?? 0) / 2;
+      const cy = (item.height ?? 0) / 2;
+      costumesXml.push(
+        `<costume name="${esc(lookName)}" center-x="${cx}" center-y="${cy}" image="${item.dataUrl}" id="${mediaId++}"/>`,
+      );
+      costumeCount++;
+    }
+
+    // sounds
+    const soundsXml: string[] = [];
+    for (const snd of children(child(obj, "soundList"), "sound")) {
+      const sndName = snd.getAttribute("name") || refName(snd) || `sound${soundsXml.length + 1}`;
+      const fileName = snd.getAttribute("fileName") || text(child(snd, "fileName"));
+      const item = findMedia(media.sounds, fileName, sndName);
+      if (!item) {
+        if (fileName || sndName) ctx.warn(`Sound "${fileName || sndName}" was not found in the archive.`);
+        continue;
+      }
+      soundsXml.push(`<sound name="${esc(sndName)}" sound="${item.dataUrl}" id="${mediaId++}"/>`);
+      soundCount++;
+    }
+
     spriteXml.push(
-      snapSprite(name, idx, id, scriptsXml.join(""), localVars.join(""), 0, 0),
+      snapSprite({
+        name,
+        idx,
+        id,
+        scripts: scriptsXml.join(""),
+        vars: localVars.join(""),
+        costumes: costumesXml.join(""),
+        sounds: soundsXml.join(""),
+        costumeIndex: costumesXml.length ? 1 : 0,
+        x: 0,
+        y: 0,
+      }),
     );
     idx++;
     id += 10;
   }
 
   if (spriteXml.length === 0) ctx.warn("The project contained no objects.");
+  if (
+    Object.keys(media.images).length === 0 &&
+    program.querySelector("lookList look")
+  )
+    ctx.warn("No images were packed — upload the whole .catrobat archive instead of only code.xml.");
 
   const xml =
     `<project name="${esc(projectName)}" app="Snap! 10, https://snap.berkeley.edu" version="2">` +
@@ -684,6 +735,8 @@ export function convertCatrobatXml(
       sprites: spriteXml.length,
       scripts: scriptCount,
       bricks: brickCount,
+      costumes: costumeCount,
+      sounds: soundCount,
       unsupported,
     },
   };
