@@ -72,6 +72,22 @@ function Index() {
     }
   }, []);
 
+  const handlePaste = useCallback(() => {
+    if (!pasted.trim()) return;
+    setBusy(true);
+    setError(null);
+    setResult(null);
+    try {
+      const converted = convertCatrobatXml(pasted);
+      setFileName("pasted code.xml");
+      setResult(converted);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not convert that XML.");
+    } finally {
+      setBusy(false);
+    }
+  }, [pasted]);
+
   const download = () => {
     if (!result) return;
     const blob = new Blob([result.xml], { type: "text/xml" });
