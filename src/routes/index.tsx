@@ -198,12 +198,14 @@ function Index() {
 
       {result && (
         <section className="mt-8 space-y-6">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             {[
               ["Project", result.projectName],
               ["Sprites", String(result.log.sprites)],
               ["Scripts", String(result.log.scripts)],
               ["Bricks", String(result.log.bricks)],
+              ["Costumes", String(result.log.costumes)],
+              ["Sounds", String(result.log.sounds)],
             ].map(([label, value]) => (
               <div key={label} className="panel px-4 py-3">
                 <div className="text-[11px] tracking-wide text-muted-foreground uppercase">
