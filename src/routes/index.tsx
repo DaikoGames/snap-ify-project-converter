@@ -54,6 +54,7 @@ function Index() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [pasted, setPasted] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = useCallback(async (file: File) => {
