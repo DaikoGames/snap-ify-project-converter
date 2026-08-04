@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useRef, useState } from "react";
 import {
   convertCatrobatXml,
-  readCatrobatFile,
+  readCatrobatArchive,
   type ConversionResult,
 } from "@/lib/catrobat-to-snap";
 
@@ -62,8 +62,8 @@ function Index() {
     setError(null);
     setResult(null);
     try {
-      const xml = await readCatrobatFile(file);
-      const converted = convertCatrobatXml(xml);
+      const { xml, media } = await readCatrobatArchive(file);
+      const converted = convertCatrobatXml(xml, media);
       setFileName(file.name);
       setResult(converted);
     } catch (e) {
