@@ -652,16 +652,81 @@ export function convertCatrobatXml(xmlText: string): ConversionResult {
   };
 }
 
-/** Reads a .catrobat / .zip archive and extracts code.xml, or takes raw XML. */
-export async function readCatrobatFile(file: File): Promise<string> {
+/* ------------------------------------------------------------------ media */
+
+const IMAGE_TYPES: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  bmp: "image/bmp",
+  webp: "image/webp",
+  svg: "image/svg+xml",
+};
+
+const SOUND_TYPES: Record<string, string> = {
+  mp3: "audio/mpeg",
+  wav: "audio/wav",
+  ogg: "audio/ogg",
+  m4a: "audio/mp4",
+  aac: "audio/aac",
+  mp4: "audio/mp4",
+};
+
+function extOf(path: string) {
+  return (path.split(".").pop() ?? "").toLowerCase();
+}
+function baseOf(path: string) {
+  return (path.split("/").pop() ?? path).toLowerCase();
+}
+
+async function measureImage(dataUrl: string): Promise<{ width: number; height: number }> {
+  if (typeof Image === "undefined") return { width: 0, height: 0 };
+  return await new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve({ width: img.naturalWidth || 0, height: img.naturalHeight || 0 });
+    img.onerror = () => resolve({ width: 0, height: 0 });
+    img.src = dataUrl;
+  });
+}
+
+/** Reads a .catrobat / .zip archive: code.xml plus every image and sound file. */
+export async function readCatrobatArchive(file: File): Promise<{ xml: string; media: MediaBundle }> {
+  const media: MediaBundle = { images: {}, sounds: {} };
   const lower = file.name.toLowerCase();
-  if (lower.endsWith(".xml")) return await file.text();
+  if (lower.endsWith(".xml")) return { xml: await file.text(), media };
+
   const JSZip = (await import("jszip")).default;
   const zip = await JSZip.loadAsync(await file.arrayBuffer());
-  const entry =
-    zip.file("code.xml") ??
-    zip.file(/(^|\/)code\.xml$/i)[0] ??
-    null;
+  const entry = zip.file("code.xml") ?? zip.file(/(^|\/)code\.xml$/i)[0] ?? null;
   if (!entry) throw new Error("No code.xml found inside the archive.");
-  return await entry.async("string");
+  const xml = await entry.async("string");
+
+  const files = zip.file(/.*/).filter((f) => !f.dir);
+  for (const f of files) {
+    const ext = extOf(f.name);
+    const imgType = IMAGE_TYPES[ext];
+    const sndType = SOUND_TYPES[ext];
+    if (!imgType && !sndType) continue;
+    // Catrobat sometimes stores .mp4 video; only treat as sound when in sounds/
+    if (!imgType && ext === "mp4" && !/sounds?\//i.test(f.name)) continue;
+    const b64 = await f.async("base64");
+    const dataUrl = `data:${imgType ?? sndType};base64,${b64}`;
+    const key = baseOf(f.name);
+    if (imgType) {
+      const { width, height } = await measureImage(dataUrl);
+      media.images[key] = { dataUrl, width, height };
+      media.images[f.name.toLowerCase()] = media.images[key]!;
+    } else {
+      media.sounds[key] = { dataUrl };
+      media.sounds[f.name.toLowerCase()] = media.sounds[key]!;
+    }
+  }
+  return { xml, media };
 }
+
+/** Back-compat helper: only the code.xml text. */
+export async function readCatrobatFile(file: File): Promise<string> {
+  return (await readCatrobatArchive(file)).xml;
+}
+
