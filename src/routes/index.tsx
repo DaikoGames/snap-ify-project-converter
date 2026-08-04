@@ -43,6 +43,9 @@ const MAPPING = [
   ["Set / change variable", "set / change variable"],
   ["Play sound, Stop all sounds", "play sound, stop all sounds"],
   ["Finger X / Finger Y / touched", "mouse x / mouse y / mouse down?"],
+  ["X / Y inclination (tilt)", "mouse x / mouse y scaled to ±90°"],
+  ["X / Y acceleration", "mouse x / mouse y scaled to ±10 m/s²"],
+  ["Compass direction", "atan2 (mouse x, mouse y)"],
 ];
 
 function Index() {
