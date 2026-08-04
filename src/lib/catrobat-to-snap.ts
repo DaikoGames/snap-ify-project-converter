@@ -534,17 +534,40 @@ function hatBlock(script: Element, ctx: Ctx): string {
 
 /* --------------------------------------------------------------- assembly */
 
-function snapSprite(
-  name: string,
-  idx: number,
-  id: number,
-  scripts: string,
-  vars: string,
-  x: number,
-  y: number,
-) {
-  return `<sprite name="${esc(name)}" idx="${idx}" x="${x}" y="${y}" heading="90" scale="1" volume="100" pan="0" rotation="1" draggable="true" costume="0" color="80,80,80,1" pen="tip" id="${id}"><costumes><list struct="atomic" id="${id + 1000}"></list></costumes><sounds><list struct="atomic" id="${id + 2000}"></list></sounds><blocks></blocks><variables>${vars}</variables><scripts>${scripts}</scripts></sprite>`;
+function findMedia(bank: Record<string, MediaItem>, fileName: string, name: string) {
+  if (!fileName && !name) return null;
+  const tries = [fileName, baseOf(fileName), name].filter(Boolean).map((s) => s.toLowerCase());
+  for (const t of tries) if (bank[t]) return bank[t]!;
+  // Catrobat prefixes files with a checksum, e.g. "A1B2..._look.png"
+  const wanted = baseOf(fileName || name);
+  for (const key of Object.keys(bank)) {
+    const k = baseOf(key);
+    if (k === wanted || k.endsWith(`_${wanted}`) || wanted.endsWith(`_${k}`)) return bank[key]!;
+  }
+  return null;
 }
+
+function snapSprite(opts: {
+  name: string;
+  idx: number;
+  id: number;
+  scripts: string;
+  vars: string;
+  costumes: string;
+  sounds: string;
+  costumeIndex: number;
+  x: number;
+  y: number;
+}) {
+  const { name, idx, id, scripts, vars, costumes, sounds, costumeIndex, x, y } = opts;
+  return (
+    `<sprite name="${esc(name)}" idx="${idx}" x="${x}" y="${y}" heading="90" scale="1" volume="100" pan="0" rotation="1" draggable="true" costume="${costumeIndex}" color="80,80,80,1" pen="tip" id="${id}">` +
+    `<costumes><list struct="atomic" id="${id + 1000}">${costumes}</list></costumes>` +
+    `<sounds><list struct="atomic" id="${id + 2000}">${sounds}</list></sounds>` +
+    `<blocks></blocks><variables>${vars}</variables><scripts>${scripts}</scripts></sprite>`
+  );
+}
+
 
 export function convertCatrobatXml(xmlText: string): ConversionResult {
   const warnings: string[] = [];
