@@ -569,7 +569,10 @@ function snapSprite(opts: {
 }
 
 
-export function convertCatrobatXml(xmlText: string): ConversionResult {
+export function convertCatrobatXml(
+  xmlText: string,
+  media: MediaBundle = { images: {}, sounds: {} },
+): ConversionResult {
   const warnings: string[] = [];
   const unsupported: Record<string, number> = {};
   let brickCount = 0;
