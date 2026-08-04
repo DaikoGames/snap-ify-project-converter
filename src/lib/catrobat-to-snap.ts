@@ -457,9 +457,9 @@ function simpleBrick(b: Element, type: string, ctx: Ctx): string {
     case "WaitUntilBrick":
       return `<block s="doWaitUntil">${a("IF_CONDITION")}</block>`;
     case "BroadcastBrick":
-      return `<block s="doBroadcast"><list><l>${esc(text(child(b, "broadcastMessage")) || "message1")}</l></list></block>`;
+      return `<block s="doBroadcast"><l>${esc(text(child(b, "broadcastMessage")) || "message1")}</l></block>`;
     case "BroadcastWaitBrick":
-      return `<block s="doBroadcastAndWait"><list><l>${esc(text(child(b, "broadcastMessage")) || "message1")}</l></list></block>`;
+      return `<block s="doBroadcastAndWait"><l>${esc(text(child(b, "broadcastMessage")) || "message1")}</l></block>`;
     case "StopScriptBrick":
       return `<block s="doStopThis"><l><option>this script</option></l></block>`;
     case "NoteBrick":
