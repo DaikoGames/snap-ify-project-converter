@@ -43,6 +43,9 @@ const MAPPING = [
   ["Set / change variable", "set / change variable"],
   ["Play sound, Stop all sounds", "play sound, stop all sounds"],
   ["Finger X / Finger Y / touched", "mouse x / mouse y / mouse down?"],
+  ["X / Y inclination (tilt)", "mouse x / mouse y scaled to ±90°"],
+  ["X / Y acceleration", "mouse x / mouse y scaled to ±10 m/s²"],
+  ["Compass direction", "atan2 (mouse x, mouse y)"],
 ];
 
 function Index() {
@@ -51,6 +54,7 @@ function Index() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [pasted, setPasted] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = useCallback(async (file: File) => {
@@ -68,6 +72,22 @@ function Index() {
       setBusy(false);
     }
   }, []);
+
+  const handlePaste = useCallback(() => {
+    if (!pasted.trim()) return;
+    setBusy(true);
+    setError(null);
+    setResult(null);
+    try {
+      const converted = convertCatrobatXml(pasted);
+      setFileName("pasted code.xml");
+      setResult(converted);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not convert that XML.");
+    } finally {
+      setBusy(false);
+    }
+  }, [pasted]);
 
   const download = () => {
     if (!result) return;
@@ -138,6 +158,37 @@ function Index() {
           <p className="mt-1 font-mono text-xs text-accent">{fileName}</p>
         )}
       </section>
+
+      <section className="panel mt-4 px-5 py-4">
+        <label htmlFor="xml-input" className="text-sm font-semibold">
+          …or paste your Catrobat <code className="font-mono text-accent">code.xml</code>
+        </label>
+        <textarea
+          id="xml-input"
+          value={pasted}
+          onChange={(e) => setPasted(e.target.value)}
+          placeholder="<program>…</program>"
+          rows={5}
+          className="mt-3 w-full resize-y rounded-xl border border-border bg-background px-4 py-3 font-mono text-xs outline-none focus:border-primary"
+        />
+        <div className="mt-3 flex gap-3">
+          <button
+            onClick={handlePaste}
+            disabled={!pasted.trim() || busy}
+            className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
+          >
+            Convert pasted XML
+          </button>
+          <button
+            onClick={() => setPasted("")}
+            className="rounded-xl border border-border px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-muted"
+          >
+            Clear
+          </button>
+        </div>
+      </section>
+
+
 
       {error && (
         <div className="panel mt-6 border-destructive/60 px-5 py-4 text-sm text-destructive">
