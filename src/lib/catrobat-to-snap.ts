@@ -12,7 +12,17 @@ export type ConversionLog = {
   sprites: number;
   scripts: number;
   bricks: number;
+  costumes: number;
+  sounds: number;
   unsupported: Record<string, number>;
+};
+
+
+export type MediaItem = { dataUrl: string; width?: number; height?: number };
+
+export type MediaBundle = {
+  images: Record<string, MediaItem>;
+  sounds: Record<string, MediaItem>;
 };
 
 export type ConversionResult = {
@@ -20,6 +30,7 @@ export type ConversionResult = {
   projectName: string;
   log: ConversionLog;
 };
+
 
 const esc = (s: string) =>
   String(s)
@@ -523,19 +534,45 @@ function hatBlock(script: Element, ctx: Ctx): string {
 
 /* --------------------------------------------------------------- assembly */
 
-function snapSprite(
-  name: string,
-  idx: number,
-  id: number,
-  scripts: string,
-  vars: string,
-  x: number,
-  y: number,
-) {
-  return `<sprite name="${esc(name)}" idx="${idx}" x="${x}" y="${y}" heading="90" scale="1" volume="100" pan="0" rotation="1" draggable="true" costume="0" color="80,80,80,1" pen="tip" id="${id}"><costumes><list struct="atomic" id="${id + 1000}"></list></costumes><sounds><list struct="atomic" id="${id + 2000}"></list></sounds><blocks></blocks><variables>${vars}</variables><scripts>${scripts}</scripts></sprite>`;
+function findMedia(bank: Record<string, MediaItem>, fileName: string, name: string) {
+  if (!fileName && !name) return null;
+  const tries = [fileName, baseOf(fileName), name].filter(Boolean).map((s) => s.toLowerCase());
+  for (const t of tries) if (bank[t]) return bank[t]!;
+  // Catrobat prefixes files with a checksum, e.g. "A1B2..._look.png"
+  const wanted = baseOf(fileName || name);
+  for (const key of Object.keys(bank)) {
+    const k = baseOf(key);
+    if (k === wanted || k.endsWith(`_${wanted}`) || wanted.endsWith(`_${k}`)) return bank[key]!;
+  }
+  return null;
 }
 
-export function convertCatrobatXml(xmlText: string): ConversionResult {
+function snapSprite(opts: {
+  name: string;
+  idx: number;
+  id: number;
+  scripts: string;
+  vars: string;
+  costumes: string;
+  sounds: string;
+  costumeIndex: number;
+  x: number;
+  y: number;
+}) {
+  const { name, idx, id, scripts, vars, costumes, sounds, costumeIndex, x, y } = opts;
+  return (
+    `<sprite name="${esc(name)}" idx="${idx}" x="${x}" y="${y}" heading="90" scale="1" volume="100" pan="0" rotation="1" draggable="true" costume="${costumeIndex}" color="80,80,80,1" pen="tip" id="${id}">` +
+    `<costumes><list struct="atomic" id="${id + 1000}">${costumes}</list></costumes>` +
+    `<sounds><list struct="atomic" id="${id + 2000}">${sounds}</list></sounds>` +
+    `<blocks></blocks><variables>${vars}</variables><scripts>${scripts}</scripts></sprite>`
+  );
+}
+
+
+export function convertCatrobatXml(
+  xmlText: string,
+  media: MediaBundle = { images: {}, sounds: {} },
+): ConversionResult {
   const warnings: string[] = [];
   const unsupported: Record<string, number> = {};
   let brickCount = 0;
@@ -589,9 +626,12 @@ export function convertCatrobatXml(xmlText: string): ConversionResult {
   }
 
   let scriptCount = 0;
+  let costumeCount = 0;
+  let soundCount = 0;
   const spriteXml: string[] = [];
   let idx = 1;
   let id = 10;
+  let mediaId = 5000;
 
   for (const obj of objects) {
     const name = obj.getAttribute("name") || refName(child(obj, "name")) || `Sprite${idx}`;
@@ -615,14 +655,62 @@ export function convertCatrobatXml(xmlText: string): ConversionResult {
       }
     }
 
+    // costumes (Catrobat "looks")
+    const costumesXml: string[] = [];
+    for (const look of children(child(obj, "lookList"), "look")) {
+      const lookName = look.getAttribute("name") || refName(look) || `costume${costumesXml.length + 1}`;
+      const fileName = look.getAttribute("fileName") || text(child(look, "fileName"));
+      const item = findMedia(media.images, fileName, lookName);
+      if (!item) {
+        if (fileName || lookName) ctx.warn(`Image "${fileName || lookName}" was not found in the archive.`);
+        continue;
+      }
+      const cx = (item.width ?? 0) / 2;
+      const cy = (item.height ?? 0) / 2;
+      costumesXml.push(
+        `<costume name="${esc(lookName)}" center-x="${cx}" center-y="${cy}" image="${item.dataUrl}" id="${mediaId++}"/>`,
+      );
+      costumeCount++;
+    }
+
+    // sounds
+    const soundsXml: string[] = [];
+    for (const snd of children(child(obj, "soundList"), "sound")) {
+      const sndName = snd.getAttribute("name") || refName(snd) || `sound${soundsXml.length + 1}`;
+      const fileName = snd.getAttribute("fileName") || text(child(snd, "fileName"));
+      const item = findMedia(media.sounds, fileName, sndName);
+      if (!item) {
+        if (fileName || sndName) ctx.warn(`Sound "${fileName || sndName}" was not found in the archive.`);
+        continue;
+      }
+      soundsXml.push(`<sound name="${esc(sndName)}" sound="${item.dataUrl}" id="${mediaId++}"/>`);
+      soundCount++;
+    }
+
     spriteXml.push(
-      snapSprite(name, idx, id, scriptsXml.join(""), localVars.join(""), 0, 0),
+      snapSprite({
+        name,
+        idx,
+        id,
+        scripts: scriptsXml.join(""),
+        vars: localVars.join(""),
+        costumes: costumesXml.join(""),
+        sounds: soundsXml.join(""),
+        costumeIndex: costumesXml.length ? 1 : 0,
+        x: 0,
+        y: 0,
+      }),
     );
     idx++;
     id += 10;
   }
 
   if (spriteXml.length === 0) ctx.warn("The project contained no objects.");
+  if (
+    Object.keys(media.images).length === 0 &&
+    program.querySelector("lookList look")
+  )
+    ctx.warn("No images were packed — upload the whole .catrobat archive instead of only code.xml.");
 
   const xml =
     `<project name="${esc(projectName)}" app="Snap! 10, https://snap.berkeley.edu" version="2">` +
@@ -647,21 +735,88 @@ export function convertCatrobatXml(xmlText: string): ConversionResult {
       sprites: spriteXml.length,
       scripts: scriptCount,
       bricks: brickCount,
+      costumes: costumeCount,
+      sounds: soundCount,
       unsupported,
     },
   };
 }
 
-/** Reads a .catrobat / .zip archive and extracts code.xml, or takes raw XML. */
-export async function readCatrobatFile(file: File): Promise<string> {
+/* ------------------------------------------------------------------ media */
+
+const IMAGE_TYPES: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  bmp: "image/bmp",
+  webp: "image/webp",
+  svg: "image/svg+xml",
+};
+
+const SOUND_TYPES: Record<string, string> = {
+  mp3: "audio/mpeg",
+  wav: "audio/wav",
+  ogg: "audio/ogg",
+  m4a: "audio/mp4",
+  aac: "audio/aac",
+  mp4: "audio/mp4",
+};
+
+function extOf(path: string) {
+  return (path.split(".").pop() ?? "").toLowerCase();
+}
+function baseOf(path: string) {
+  return (path.split("/").pop() ?? path).toLowerCase();
+}
+
+async function measureImage(dataUrl: string): Promise<{ width: number; height: number }> {
+  if (typeof Image === "undefined") return { width: 0, height: 0 };
+  return await new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve({ width: img.naturalWidth || 0, height: img.naturalHeight || 0 });
+    img.onerror = () => resolve({ width: 0, height: 0 });
+    img.src = dataUrl;
+  });
+}
+
+/** Reads a .catrobat / .zip archive: code.xml plus every image and sound file. */
+export async function readCatrobatArchive(file: File): Promise<{ xml: string; media: MediaBundle }> {
+  const media: MediaBundle = { images: {}, sounds: {} };
   const lower = file.name.toLowerCase();
-  if (lower.endsWith(".xml")) return await file.text();
+  if (lower.endsWith(".xml")) return { xml: await file.text(), media };
+
   const JSZip = (await import("jszip")).default;
   const zip = await JSZip.loadAsync(await file.arrayBuffer());
-  const entry =
-    zip.file("code.xml") ??
-    zip.file(/(^|\/)code\.xml$/i)[0] ??
-    null;
+  const entry = zip.file("code.xml") ?? zip.file(/(^|\/)code\.xml$/i)[0] ?? null;
   if (!entry) throw new Error("No code.xml found inside the archive.");
-  return await entry.async("string");
+  const xml = await entry.async("string");
+
+  const files = zip.file(/.*/).filter((f) => !f.dir);
+  for (const f of files) {
+    const ext = extOf(f.name);
+    const imgType = IMAGE_TYPES[ext];
+    const sndType = SOUND_TYPES[ext];
+    if (!imgType && !sndType) continue;
+    // Catrobat sometimes stores .mp4 video; only treat as sound when in sounds/
+    if (!imgType && ext === "mp4" && !/sounds?\//i.test(f.name)) continue;
+    const b64 = await f.async("base64");
+    const dataUrl = `data:${imgType ?? sndType};base64,${b64}`;
+    const key = baseOf(f.name);
+    if (imgType) {
+      const { width, height } = await measureImage(dataUrl);
+      media.images[key] = { dataUrl, width, height };
+      media.images[f.name.toLowerCase()] = media.images[key]!;
+    } else {
+      media.sounds[key] = { dataUrl };
+      media.sounds[f.name.toLowerCase()] = media.sounds[key]!;
+    }
+  }
+  return { xml, media };
 }
+
+/** Back-compat helper: only the code.xml text. */
+export async function readCatrobatFile(file: File): Promise<string> {
+  return (await readCatrobatArchive(file)).xml;
+}
+
