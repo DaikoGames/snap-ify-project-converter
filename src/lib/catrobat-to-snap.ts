@@ -91,13 +91,12 @@ const MONADIC: Record<string, string> = {
 };
 
 const SENSORS: Record<string, string> = {
-  OBJECT_X: "reportObjectX",
-  OBJECT_Y: "reportObjectY",
+  OBJECT_X: "xPosition",
+  OBJECT_Y: "yPosition",
   OBJECT_ROTATION: "direction",
-  OBJECT_SIZE: "size",
-  OBJECT_TRANSPARENCY: "ghost",
-  OBJECT_BRIGHTNESS: "brightness",
+  OBJECT_SIZE: "getScale",
 };
+
 
 function num(v: string) {
   return v.replace(/^\+/, "");
@@ -153,9 +152,9 @@ function formulaToSnap(f: Element | null, warn: (m: string) => void): string {
         case "ROUND":
           return `<block s="reportRound">${a()}</block>`;
         case "MIN":
-          return `<block s="reportMin"><list>${a()}${b()}</list></block>`;
+          return `<block s="reportVariadicMin"><list>${a()}${b()}</list></block>`;
         case "MAX":
-          return `<block s="reportMax"><list>${a()}${b()}</list></block>`;
+          return `<block s="reportVariadicMax"><list>${a()}${b()}</list></block>`;
         case "JOIN":
           return `<block s="reportJoinWords"><list>${a()}${b()}</list></block>`;
         case "LENGTH":
@@ -203,14 +202,14 @@ function formulaToSnap(f: Element | null, warn: (m: string) => void): string {
         // device right/left/up/down. Mouse x -240..240 -> -90..90 degrees,
         // mouse y -180..180 -> -90..90 degrees.
         case "X_INCLINATION":
-          return `<block s="reportProduct"><list><block s="reportMouseX"/><l>0.375</l></list></block>`;
+          return `<block s="reportVariadicProduct"><list><block s="reportMouseX"/><l>0.375</l></list></block>`;
         case "Y_INCLINATION":
-          return `<block s="reportProduct"><list><block s="reportMouseY"/><l>0.5</l></list></block>`;
+          return `<block s="reportVariadicProduct"><list><block s="reportMouseY"/><l>0.5</l></list></block>`;
         // Acceleration follows the same "mouse = phone" idea (m/s², ±10).
         case "X_ACCELERATION":
-          return `<block s="reportProduct"><list><block s="reportMouseX"/><l>0.0417</l></list></block>`;
+          return `<block s="reportVariadicProduct"><list><block s="reportMouseX"/><l>0.0417</l></list></block>`;
         case "Y_ACCELERATION":
-          return `<block s="reportProduct"><list><block s="reportMouseY"/><l>0.0556</l></list></block>`;
+          return `<block s="reportVariadicProduct"><list><block s="reportMouseY"/><l>0.0556</l></list></block>`;
         case "Z_ACCELERATION":
           return `<l>0</l>`;
         case "COMPASS_DIRECTION":
@@ -307,7 +306,7 @@ function bricksToSnap(brickList: Element | null, ctx: Ctx): string {
       out.push(
         hasElse
           ? `<block s="doIfElse">${cond}<script>${wrap(thenBody)}</script><script>${wrap(elseBody)}</script></block>`
-          : `<block s="doIf">${cond}<script>${wrap(thenBody)}</script><l></l></block>`,
+          : `<block s="doIf">${cond}<script>${wrap(thenBody)}</script></block>`,
       );
       continue;
     }
@@ -457,13 +456,13 @@ function simpleBrick(b: Element, type: string, ctx: Ctx): string {
     case "WaitUntilBrick":
       return `<block s="doWaitUntil">${a("IF_CONDITION")}</block>`;
     case "BroadcastBrick":
-      return `<block s="doBroadcast"><list><l>${esc(text(child(b, "broadcastMessage")) || "message1")}</l></list></block>`;
+      return `<block s="doBroadcast"><l>${esc(text(child(b, "broadcastMessage")) || "message1")}</l></block>`;
     case "BroadcastWaitBrick":
-      return `<block s="doBroadcastAndWait"><list><l>${esc(text(child(b, "broadcastMessage")) || "message1")}</l></list></block>`;
+      return `<block s="doBroadcastAndWait"><l>${esc(text(child(b, "broadcastMessage")) || "message1")}</l></block>`;
     case "StopScriptBrick":
       return `<block s="doStopThis"><l><option>this script</option></l></block>`;
     case "NoteBrick":
-      return `<block s="doComment"><l>${esc(text(child(b, "note")))}</l></block>`;
+      return `<block s="doWait"><l>0</l><comment w="180" collapsed="false">${esc(text(child(b, "note")))}</comment></block>`;
     case "CloneBrick":
       return `<block s="createClone"><l><option>myself</option></l></block>`;
     case "DeleteThisCloneBrick":
@@ -490,7 +489,7 @@ function simpleBrick(b: Element, type: string, ctx: Ctx): string {
 
     default: {
       ctx.unsupported[type] = (ctx.unsupported[type] ?? 0) + 1;
-      return `<block s="doComment"><l>Catrobat brick not supported: ${esc(type)}</l></block>`;
+      return `<block s="doWait"><l>0</l><comment w="220" collapsed="false">Catrobat brick not supported: ${esc(type)}</comment></block>`;
     }
   }
 }
