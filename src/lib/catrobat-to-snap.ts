@@ -12,8 +12,11 @@ export type ConversionLog = {
   sprites: number;
   scripts: number;
   bricks: number;
+  costumes: number;
+  sounds: number;
   unsupported: Record<string, number>;
 };
+
 
 export type MediaItem = { dataUrl: string; width?: number; height?: number };
 
