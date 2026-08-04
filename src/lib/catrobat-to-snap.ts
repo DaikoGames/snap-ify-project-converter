@@ -91,13 +91,12 @@ const MONADIC: Record<string, string> = {
 };
 
 const SENSORS: Record<string, string> = {
-  OBJECT_X: "reportObjectX",
-  OBJECT_Y: "reportObjectY",
+  OBJECT_X: "xPosition",
+  OBJECT_Y: "yPosition",
   OBJECT_ROTATION: "direction",
-  OBJECT_SIZE: "size",
-  OBJECT_TRANSPARENCY: "ghost",
-  OBJECT_BRIGHTNESS: "brightness",
+  OBJECT_SIZE: "getScale",
 };
+
 
 function num(v: string) {
   return v.replace(/^\+/, "");
