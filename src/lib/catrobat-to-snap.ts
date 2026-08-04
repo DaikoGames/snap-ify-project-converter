@@ -463,7 +463,7 @@ function simpleBrick(b: Element, type: string, ctx: Ctx): string {
     case "StopScriptBrick":
       return `<block s="doStopThis"><l><option>this script</option></l></block>`;
     case "NoteBrick":
-      return `<block s="doComment"><l>${esc(text(child(b, "note")))}</l></block>`;
+      return `<block s="doWait"><l>0</l><comment w="180" collapsed="false">${esc(text(child(b, "note")))}</comment></block>`;
     case "CloneBrick":
       return `<block s="createClone"><l><option>myself</option></l></block>`;
     case "DeleteThisCloneBrick":
@@ -490,7 +490,7 @@ function simpleBrick(b: Element, type: string, ctx: Ctx): string {
 
     default: {
       ctx.unsupported[type] = (ctx.unsupported[type] ?? 0) + 1;
-      return `<block s="doComment"><l>Catrobat brick not supported: ${esc(type)}</l></block>`;
+      return `<block s="doWait"><l>0</l><comment w="220" collapsed="false">Catrobat brick not supported: ${esc(type)}</comment></block>`;
     }
   }
 }
