@@ -159,6 +159,37 @@ function Index() {
         )}
       </section>
 
+      <section className="panel mt-4 px-5 py-4">
+        <label htmlFor="xml-input" className="text-sm font-semibold">
+          …or paste your Catrobat <code className="font-mono text-accent">code.xml</code>
+        </label>
+        <textarea
+          id="xml-input"
+          value={pasted}
+          onChange={(e) => setPasted(e.target.value)}
+          placeholder="<program>…</program>"
+          rows={5}
+          className="mt-3 w-full resize-y rounded-xl border border-border bg-background px-4 py-3 font-mono text-xs outline-none focus:border-primary"
+        />
+        <div className="mt-3 flex gap-3">
+          <button
+            onClick={handlePaste}
+            disabled={!pasted.trim() || busy}
+            className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
+          >
+            Convert pasted XML
+          </button>
+          <button
+            onClick={() => setPasted("")}
+            className="rounded-xl border border-border px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-muted"
+          >
+            Clear
+          </button>
+        </div>
+      </section>
+
+
+
       {error && (
         <div className="panel mt-6 border-destructive/60 px-5 py-4 text-sm text-destructive">
           {error}
