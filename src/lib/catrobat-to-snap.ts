@@ -59,13 +59,9 @@ function text(node: Element | null): string {
  * sounds, objects…) are stored as `reference="../../foo/bar[2]"` pointers.
  * Without resolving them every variable would come out as "variable".
  */
-function resolveRef(el: Element | null, seen = new Set<Element>()): Element | null {
-  if (!el || seen.has(el)) return el;
-  const ref = el.getAttribute("reference");
-  if (!ref) return el;
-  seen.add(el);
-  let cur: Element | null = el;
-  for (const seg of ref.split("/")) {
+function walkRef(from: Element, segs: string[]): Element | null {
+  let cur: Element | null = from;
+  for (const seg of segs) {
     if (!cur) return null;
     if (seg === "" || seg === ".") continue;
     if (seg === "..") {
@@ -77,8 +73,24 @@ function resolveRef(el: Element | null, seen = new Set<Element>()): Element | nu
     const kids = children(cur, m[1]!);
     cur = kids[m[2] ? parseInt(m[2], 10) - 1 : 0] ?? null;
   }
-  return cur ? resolveRef(cur, seen) : null;
+  return cur;
 }
+
+function resolveRef(el: Element | null, seen = new Set<Element>()): Element | null {
+  if (!el || seen.has(el)) return el;
+  const ref = el.getAttribute("reference");
+  if (!ref) return el;
+  seen.add(el);
+  const segs = ref.split("/");
+  // Exporters differ by one level of ".."; try the strict path first, then the
+  // shallower and the deeper variant before giving up.
+  const target =
+    walkRef(el, segs) ??
+    walkRef(el, segs.slice(1)) ??
+    walkRef(el, ["..", ...segs]);
+  return target ? resolveRef(target, seen) : null;
+}
+
 
 
 /* --------------------------------------------------------------- formulas */
