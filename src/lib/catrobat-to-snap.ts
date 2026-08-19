@@ -144,7 +144,14 @@ function variadic(sel: string, parts: string[]) {
   return `<block s="${sel}"><list>${parts.join("")}</list></block>`;
 }
 
-function formulaToSnap(f: Element | null, warn: (m: string) => void): string {
+type FCtx = {
+  warn: (m: string) => void;
+  vars: Set<string>;
+  lists: Set<string>;
+};
+
+function formulaToSnap(f: Element | null, ctx: FCtx): string {
+  const warn = ctx.warn;
   if (!f) return "<l></l>";
   const type = text(child(f, "type"));
   const value = text(child(f, "value"));
@@ -156,20 +163,26 @@ function formulaToSnap(f: Element | null, warn: (m: string) => void): string {
       return `<l>${esc(num(value))}</l>`;
     case "STRING":
       return `<l>${esc(value)}</l>`;
-    case "USER_VARIABLE":
-      return `<block var="${esc(value)}"/>`;
-    case "USER_LIST":
-      return `<block var="${esc(value)}"/>`;
+    case "USER_VARIABLE": {
+      const n = value || refName(child(f, "userVariable"));
+      if (n) ctx.vars.add(n);
+      return `<block var="${esc(n || "variable")}"/>`;
+    }
+    case "USER_LIST": {
+      const n = value || refName(child(f, "userList"));
+      if (n) ctx.lists.add(n);
+      return `<block var="${esc(n || "list")}"/>`;
+    }
     case "BRACKET":
-      return formulaToSnap(left ?? right, warn);
+      return formulaToSnap(left ?? right, ctx);
     case "OPERATOR": {
       if (value === "LOGICAL_NOT")
-        return `<block s="reportNot">${formulaToSnap(left ?? right, warn)}</block>`;
+        return `<block s="reportNot">${formulaToSnap(left ?? right, ctx)}</block>`;
       if (value === "MINUS" && !left)
-        return `<block s="reportDifference"><l>0</l>${formulaToSnap(right, warn)}</block>`;
+        return `<block s="reportDifference"><l>0</l>${formulaToSnap(right, ctx)}</block>`;
       const sel = BIN_OPS[value];
-      const a = formulaToSnap(left, warn);
-      const b = formulaToSnap(right, warn);
+      const a = formulaToSnap(left, ctx);
+      const b = formulaToSnap(right, ctx);
       if (!sel) {
         warn(`Unknown operator "${value}"`);
         return "<l></l>";
@@ -180,8 +193,8 @@ function formulaToSnap(f: Element | null, warn: (m: string) => void): string {
       return `<block s="${sel}">${a}${b}</block>`;
     }
     case "FUNCTION": {
-      const a = () => formulaToSnap(left, warn);
-      const b = () => formulaToSnap(right, warn);
+      const a = () => formulaToSnap(left, ctx);
+      const b = () => formulaToSnap(right, ctx);
       switch (value) {
         case "RAND":
           return `<block s="reportRandom">${a()}${b()}</block>`;
@@ -278,22 +291,21 @@ function formulaOf(brick: Element, category: string): Element | null {
   return null;
 }
 
-function arg(brick: Element, category: string, warn: (m: string) => void, fallback = "0") {
+function arg(brick: Element, category: string, ctx: FCtx, fallback = "0") {
   const f = formulaOf(brick, category);
   if (!f) return `<l>${esc(fallback)}</l>`;
-  return formulaToSnap(f, warn);
+  return formulaToSnap(f, ctx);
 }
 
 /* ----------------------------------------------------------------- bricks */
 
-type Ctx = {
-  warn: (m: string) => void;
+type Ctx = FCtx & {
   unsupported: Record<string, number>;
   count: () => void;
-  globals: Set<string>;
 };
 
-function refName(el: Element | null): string {
+function refName(elIn: Element | null): string {
+  const el = resolveRef(elIn);
   if (!el) return "";
   const n = child(el, "name");
   if (n) return text(n);
@@ -313,7 +325,7 @@ function bricksToSnap(brickList: Element | null, ctx: Ctx): string {
 
     // ---- nesting: if / else / end
     if (type === "IfLogicBeginBrick" || type === "IfThenLogicBeginBrick") {
-      const cond = arg(b, "IF_CONDITION", ctx.warn);
+      const cond = arg(b, "IF_CONDITION", ctx);
       const thenBody: Element[] = [];
       const elseBody: Element[] = [];
       let depth = 0;
@@ -374,11 +386,11 @@ function bricksToSnap(brickList: Element | null, ctx: Ctx): string {
       if (type === "ForeverBrick") out.push(`<block s="doForever"><script>${inner}</script></block>`);
       else if (type === "RepeatBrick")
         out.push(
-          `<block s="doRepeat">${arg(b, "TIMES_TO_REPEAT", ctx.warn, "10")}<script>${inner}</script></block>`,
+          `<block s="doRepeat">${arg(b, "TIMES_TO_REPEAT", ctx, "10")}<script>${inner}</script></block>`,
         );
       else
         out.push(
-          `<block s="doUntil">${arg(b, "REPEAT_UNTIL_CONDITION", ctx.warn)}<script>${inner}</script></block>`,
+          `<block s="doUntil">${arg(b, "REPEAT_UNTIL_CONDITION", ctx)}<script>${inner}</script></block>`,
         );
       continue;
     }
@@ -394,7 +406,7 @@ function bricksToSnap(brickList: Element | null, ctx: Ctx): string {
 }
 
 function simpleBrick(b: Element, type: string, ctx: Ctx): string {
-  const a = (c: string, fb = "0") => arg(b, c, ctx.warn, fb);
+  const a = (c: string, fb = "0") => arg(b, c, ctx, fb);
   const userVar = () => refName(child(b, "userVariable"));
 
   switch (type) {
@@ -549,7 +561,7 @@ function hatBlock(script: Element, ctx: Ctx): string {
       return `<block s="receiveMessage"><l>${esc(text(child(script, "receivedMessage")) || "message1")}</l></block>`;
     case "WhenConditionScript": {
       const f = child(child(script, "formulaMap") ?? script, "formula") ?? formulaOf(script, "IF_CONDITION");
-      return `<block s="receiveCondition">${formulaToSnap(f, ctx.warn)}</block>`;
+      return `<block s="receiveCondition">${formulaToSnap(f, ctx)}</block>`;
     }
     case "WhenBackgroundChangesScript":
       return `<block s="receiveGo"/>`;
