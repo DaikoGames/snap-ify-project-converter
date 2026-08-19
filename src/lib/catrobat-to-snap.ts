@@ -632,7 +632,8 @@ export function convertCatrobatXml(
     count: () => {
       brickCount++;
     },
-    globals: new Set<string>(),
+    vars: new Set<string>(),
+    lists: new Set<string>(),
   };
 
   const doc = new DOMParser().parseFromString(xmlText, "text/xml");
@@ -719,14 +720,26 @@ export function convertCatrobatXml(
       scriptCount++;
     }
 
-    // sprite-local variables
+    // sprite-local variables and lists (declared with a starting value of 0 /
+    // an empty list, so every block that reads them works right away)
     const localVars: string[] = [];
-    const uvl = child(obj, "userVariables") ?? obj.querySelector("userVariables");
-    if (uvl) {
-      for (const v of Array.from(uvl.children)) {
-        const n = refName(v);
-        if (n) localVars.push(`<variable name="${esc(n)}"><l>0</l></variable>`);
-      }
+    const objectVarNames = namesIn([
+      child(obj, "userVariables"),
+      child(obj, "userVariableList"),
+    ]);
+    for (const entry of q("objectVariableList > entry")) {
+      if (resolveRef(child(entry, "object")) !== obj) continue;
+      objectVarNames.push(...namesIn([child(entry, "list")]));
+    }
+    for (const n of objectVarNames) {
+      if (declared.has(n)) continue;
+      declared.add(n);
+      localVars.push(varDecl(n));
+    }
+    for (const n of namesIn([child(obj, "userLists"), child(obj, "userListList")])) {
+      if (declared.has(n)) continue;
+      declared.add(n);
+      localVars.push(listDecl(n));
     }
 
     // costumes (Catrobat "looks")
@@ -779,6 +792,13 @@ export function convertCatrobatXml(
     id += 10;
   }
 
+  // anything a brick or formula referenced but nobody declared becomes a global
+  for (const n of ctx.vars) if (!declared.has(n)) { declared.add(n); globalVarNames.push(n); }
+  for (const n of ctx.lists) if (!declared.has(n)) { declared.add(n); globalListNames.push(n); }
+
+  const globalsXml =
+    globalVarNames.map(varDecl).join("") + globalListNames.map(listDecl).join("");
+
   if (spriteXml.length === 0) ctx.warn("The project contained no objects.");
   if (
     Object.keys(media.images).length === 0 &&
@@ -798,7 +818,7 @@ export function convertCatrobatXml(
     `<blocks></blocks><variables></variables><scripts></scripts>` +
     `<sprites select="1">${spriteXml.join("")}</sprites>` +
     `</stage>` +
-    `<variables>${globalVarsXml.join("")}</variables>` +
+    `<variables>${globalsXml}</variables>` +
     `</scene></scenes></project>`;
 
   return {
