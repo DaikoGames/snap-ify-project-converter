@@ -54,6 +54,33 @@ function text(node: Element | null): string {
   return node?.textContent?.trim() ?? "";
 }
 
+/**
+ * Catrobat XML is serialized by XStream, so repeated nodes (variables, looks,
+ * sounds, objects…) are stored as `reference="../../foo/bar[2]"` pointers.
+ * Without resolving them every variable would come out as "variable".
+ */
+function resolveRef(el: Element | null, seen = new Set<Element>()): Element | null {
+  if (!el || seen.has(el)) return el;
+  const ref = el.getAttribute("reference");
+  if (!ref) return el;
+  seen.add(el);
+  let cur: Element | null = el;
+  for (const seg of ref.split("/")) {
+    if (!cur) return null;
+    if (seg === "" || seg === ".") continue;
+    if (seg === "..") {
+      cur = cur.parentElement;
+      continue;
+    }
+    const m = /^([\w:.-]+)(?:\[(\d+)\])?$/.exec(seg);
+    if (!m) return null;
+    const kids = children(cur, m[1]!);
+    cur = kids[m[2] ? parseInt(m[2], 10) - 1 : 0] ?? null;
+  }
+  return cur ? resolveRef(cur, seen) : null;
+}
+
+
 /* --------------------------------------------------------------- formulas */
 
 const BIN_OPS: Record<string, string> = {
