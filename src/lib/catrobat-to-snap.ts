@@ -610,8 +610,8 @@ function snapSprite(opts: {
   const { name, idx, id, scripts, vars, costumes, sounds, costumeIndex, x, y } = opts;
   return (
     `<sprite name="${esc(name)}" idx="${idx}" x="${x}" y="${y}" heading="90" scale="1" volume="100" pan="0" rotation="1" draggable="true" costume="${costumeIndex}" color="80,80,80,1" pen="tip" id="${id}">` +
-    `<costumes><list struct="atomic" id="${id + 1000}">${costumes}</list></costumes>` +
-    `<sounds><list struct="atomic" id="${id + 2000}">${sounds}</list></sounds>` +
+    `<costumes><list id="${id + 1000}">${costumes}</list></costumes>` +
+    `<sounds><list id="${id + 2000}">${sounds}</list></sounds>` +
     `<blocks></blocks><variables>${vars}</variables><scripts>${scripts}</scripts></sprite>`
   );
 }
@@ -686,7 +686,7 @@ export function convertCatrobatXml(
 
   const varDecl = (n: string) => `<variable name="${esc(n)}"><l>0</l></variable>`;
   const listDecl = (n: string) =>
-    `<variable name="${esc(n)}"><list struct="atomic"></list></variable>`;
+    `<variable name="${esc(n)}"><list></list></variable>`;
 
 
   // objects
@@ -755,7 +755,7 @@ export function convertCatrobatXml(
       const cx = (item.width ?? 0) / 2;
       const cy = (item.height ?? 0) / 2;
       costumesXml.push(
-        `<costume name="${esc(lookName)}" center-x="${cx}" center-y="${cy}" image="${item.dataUrl}" id="${mediaId++}"/>`,
+        `<item><costume name="${esc(lookName)}" center-x="${cx}" center-y="${cy}" image="${item.dataUrl}" id="${mediaId++}"/></item>`,
       );
       costumeCount++;
     }
@@ -770,7 +770,9 @@ export function convertCatrobatXml(
         if (fileName || sndName) ctx.warn(`Sound "${fileName || sndName}" was not found in the archive.`);
         continue;
       }
-      soundsXml.push(`<sound name="${esc(sndName)}" sound="${item.dataUrl}" id="${mediaId++}"/>`);
+      soundsXml.push(
+        `<item><sound name="${esc(sndName)}" sound="${item.dataUrl}" id="${mediaId++}"/></item>`,
+      );
       soundCount++;
     }
 
@@ -813,8 +815,8 @@ export function convertCatrobatXml(
     `<notes></notes><hidden></hidden><headers></headers><code></code><blocks></blocks>` +
     `<stage name="Stage" width="480" height="360" costume="0" color="255,255,255,1" tempo="60" threadsafe="false" penlog="false" volume="100" pan="0" lines="round" ternary="false" hyperops="true" codify="false" inheritance="true" sublistIDs="false" scheduled="false" id="1">` +
     `<pentrails></pentrails>` +
-    `<costumes><list struct="atomic" id="2"></list></costumes>` +
-    `<sounds><list struct="atomic" id="3"></list></sounds>` +
+    `<costumes><list id="2"></list></costumes>` +
+    `<sounds><list id="3"></list></sounds>` +
     `<blocks></blocks><variables></variables><scripts></scripts>` +
     `<sprites select="1">${spriteXml.join("")}</sprites>` +
     `</stage>` +
