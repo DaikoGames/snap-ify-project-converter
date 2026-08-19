@@ -54,6 +54,45 @@ function text(node: Element | null): string {
   return node?.textContent?.trim() ?? "";
 }
 
+/**
+ * Catrobat XML is serialized by XStream, so repeated nodes (variables, looks,
+ * sounds, objects…) are stored as `reference="../../foo/bar[2]"` pointers.
+ * Without resolving them every variable would come out as "variable".
+ */
+function walkRef(from: Element, segs: string[]): Element | null {
+  let cur: Element | null = from;
+  for (const seg of segs) {
+    if (!cur) return null;
+    if (seg === "" || seg === ".") continue;
+    if (seg === "..") {
+      cur = cur.parentElement;
+      continue;
+    }
+    const m = /^([\w:.-]+)(?:\[(\d+)\])?$/.exec(seg);
+    if (!m) return null;
+    const kids = children(cur, m[1]!);
+    cur = kids[m[2] ? parseInt(m[2], 10) - 1 : 0] ?? null;
+  }
+  return cur;
+}
+
+function resolveRef(el: Element | null, seen = new Set<Element>()): Element | null {
+  if (!el || seen.has(el)) return el;
+  const ref = el.getAttribute("reference");
+  if (!ref) return el;
+  seen.add(el);
+  const segs = ref.split("/");
+  // Exporters differ by one level of ".."; try the strict path first, then the
+  // shallower and the deeper variant before giving up.
+  const target =
+    walkRef(el, segs) ??
+    walkRef(el, segs.slice(1)) ??
+    walkRef(el, ["..", ...segs]);
+  return target ? resolveRef(target, seen) : null;
+}
+
+
+
 /* --------------------------------------------------------------- formulas */
 
 const BIN_OPS: Record<string, string> = {
@@ -117,7 +156,14 @@ function variadic(sel: string, parts: string[]) {
   return `<block s="${sel}"><list>${parts.join("")}</list></block>`;
 }
 
-function formulaToSnap(f: Element | null, warn: (m: string) => void): string {
+type FCtx = {
+  warn: (m: string) => void;
+  vars: Set<string>;
+  lists: Set<string>;
+};
+
+function formulaToSnap(f: Element | null, ctx: FCtx): string {
+  const warn = ctx.warn;
   if (!f) return "<l></l>";
   const type = text(child(f, "type"));
   const value = text(child(f, "value"));
@@ -129,20 +175,26 @@ function formulaToSnap(f: Element | null, warn: (m: string) => void): string {
       return `<l>${esc(num(value))}</l>`;
     case "STRING":
       return `<l>${esc(value)}</l>`;
-    case "USER_VARIABLE":
-      return `<block var="${esc(value)}"/>`;
-    case "USER_LIST":
-      return `<block var="${esc(value)}"/>`;
+    case "USER_VARIABLE": {
+      const n = value || refName(child(f, "userVariable"));
+      if (n) ctx.vars.add(n);
+      return `<block var="${esc(n || "variable")}"/>`;
+    }
+    case "USER_LIST": {
+      const n = value || refName(child(f, "userList"));
+      if (n) ctx.lists.add(n);
+      return `<block var="${esc(n || "list")}"/>`;
+    }
     case "BRACKET":
-      return formulaToSnap(left ?? right, warn);
+      return formulaToSnap(left ?? right, ctx);
     case "OPERATOR": {
       if (value === "LOGICAL_NOT")
-        return `<block s="reportNot">${formulaToSnap(left ?? right, warn)}</block>`;
+        return `<block s="reportNot">${formulaToSnap(left ?? right, ctx)}</block>`;
       if (value === "MINUS" && !left)
-        return `<block s="reportDifference"><l>0</l>${formulaToSnap(right, warn)}</block>`;
+        return `<block s="reportDifference"><l>0</l>${formulaToSnap(right, ctx)}</block>`;
       const sel = BIN_OPS[value];
-      const a = formulaToSnap(left, warn);
-      const b = formulaToSnap(right, warn);
+      const a = formulaToSnap(left, ctx);
+      const b = formulaToSnap(right, ctx);
       if (!sel) {
         warn(`Unknown operator "${value}"`);
         return "<l></l>";
@@ -153,8 +205,8 @@ function formulaToSnap(f: Element | null, warn: (m: string) => void): string {
       return `<block s="${sel}">${a}${b}</block>`;
     }
     case "FUNCTION": {
-      const a = () => formulaToSnap(left, warn);
-      const b = () => formulaToSnap(right, warn);
+      const a = () => formulaToSnap(left, ctx);
+      const b = () => formulaToSnap(right, ctx);
       switch (value) {
         case "RAND":
           return `<block s="reportRandom">${a()}${b()}</block>`;
@@ -251,22 +303,21 @@ function formulaOf(brick: Element, category: string): Element | null {
   return null;
 }
 
-function arg(brick: Element, category: string, warn: (m: string) => void, fallback = "0") {
+function arg(brick: Element, category: string, ctx: FCtx, fallback = "0") {
   const f = formulaOf(brick, category);
   if (!f) return `<l>${esc(fallback)}</l>`;
-  return formulaToSnap(f, warn);
+  return formulaToSnap(f, ctx);
 }
 
 /* ----------------------------------------------------------------- bricks */
 
-type Ctx = {
-  warn: (m: string) => void;
+type Ctx = FCtx & {
   unsupported: Record<string, number>;
   count: () => void;
-  globals: Set<string>;
 };
 
-function refName(el: Element | null): string {
+function refName(elIn: Element | null): string {
+  const el = resolveRef(elIn);
   if (!el) return "";
   const n = child(el, "name");
   if (n) return text(n);
@@ -286,7 +337,7 @@ function bricksToSnap(brickList: Element | null, ctx: Ctx): string {
 
     // ---- nesting: if / else / end
     if (type === "IfLogicBeginBrick" || type === "IfThenLogicBeginBrick") {
-      const cond = arg(b, "IF_CONDITION", ctx.warn);
+      const cond = arg(b, "IF_CONDITION", ctx);
       const thenBody: Element[] = [];
       const elseBody: Element[] = [];
       let depth = 0;
@@ -347,11 +398,11 @@ function bricksToSnap(brickList: Element | null, ctx: Ctx): string {
       if (type === "ForeverBrick") out.push(`<block s="doForever"><script>${inner}</script></block>`);
       else if (type === "RepeatBrick")
         out.push(
-          `<block s="doRepeat">${arg(b, "TIMES_TO_REPEAT", ctx.warn, "10")}<script>${inner}</script></block>`,
+          `<block s="doRepeat">${arg(b, "TIMES_TO_REPEAT", ctx, "10")}<script>${inner}</script></block>`,
         );
       else
         out.push(
-          `<block s="doUntil">${arg(b, "REPEAT_UNTIL_CONDITION", ctx.warn)}<script>${inner}</script></block>`,
+          `<block s="doUntil">${arg(b, "REPEAT_UNTIL_CONDITION", ctx)}<script>${inner}</script></block>`,
         );
       continue;
     }
@@ -367,8 +418,17 @@ function bricksToSnap(brickList: Element | null, ctx: Ctx): string {
 }
 
 function simpleBrick(b: Element, type: string, ctx: Ctx): string {
-  const a = (c: string, fb = "0") => arg(b, c, ctx.warn, fb);
-  const userVar = () => refName(child(b, "userVariable"));
+  const a = (c: string, fb = "0") => arg(b, c, ctx, fb);
+  const userVar = () => {
+    const n = refName(child(b, "userVariable"));
+    if (n) ctx.vars.add(n);
+    return n;
+  };
+  const userList = () => {
+    const n = refName(child(b, "userList"));
+    if (n) ctx.lists.add(n);
+    return n;
+  };
 
   switch (type) {
     /* motion */
@@ -490,13 +550,13 @@ function simpleBrick(b: Element, type: string, ctx: Ctx): string {
     case "HideTextBrick":
       return `<block s="doHideVar"><l>${esc(userVar() || "variable")}</l></block>`;
     case "AddItemToUserListBrick":
-      return `<block s="doAddToList">${a("LIST_ADD_ITEM", "thing")}<block var="${esc(refName(child(b, "userList")) || "list")}"/></block>`;
+      return `<block s="doAddToList">${a("LIST_ADD_ITEM", "thing")}<block var="${esc(userList() || "list")}"/></block>`;
     case "DeleteItemOfUserListBrick":
-      return `<block s="doDeleteFromList">${a("LIST_DELETE_ITEM", "1")}<block var="${esc(refName(child(b, "userList")) || "list")}"/></block>`;
+      return `<block s="doDeleteFromList">${a("LIST_DELETE_ITEM", "1")}<block var="${esc(userList() || "list")}"/></block>`;
     case "InsertItemIntoUserListBrick":
-      return `<block s="doInsertInList">${a("INSERT_ITEM_INTO_USERLIST_VALUE", "thing")}${a("INSERT_ITEM_INTO_USERLIST_INDEX", "1")}<block var="${esc(refName(child(b, "userList")) || "list")}"/></block>`;
+      return `<block s="doInsertInList">${a("INSERT_ITEM_INTO_USERLIST_VALUE", "thing")}${a("INSERT_ITEM_INTO_USERLIST_INDEX", "1")}<block var="${esc(userList() || "list")}"/></block>`;
     case "ReplaceItemInUserListBrick":
-      return `<block s="doReplaceInList">${a("REPLACE_ITEM_IN_USERLIST_INDEX", "1")}<block var="${esc(refName(child(b, "userList")) || "list")}"/>${a("REPLACE_ITEM_IN_USERLIST_VALUE", "thing")}</block>`;
+      return `<block s="doReplaceInList">${a("REPLACE_ITEM_IN_USERLIST_INDEX", "1")}<block var="${esc(userList() || "list")}"/>${a("REPLACE_ITEM_IN_USERLIST_VALUE", "thing")}</block>`;
 
     default: {
       ctx.unsupported[type] = (ctx.unsupported[type] ?? 0) + 1;
@@ -522,7 +582,7 @@ function hatBlock(script: Element, ctx: Ctx): string {
       return `<block s="receiveMessage"><l>${esc(text(child(script, "receivedMessage")) || "message1")}</l></block>`;
     case "WhenConditionScript": {
       const f = child(child(script, "formulaMap") ?? script, "formula") ?? formulaOf(script, "IF_CONDITION");
-      return `<block s="receiveCondition">${formulaToSnap(f, ctx.warn)}</block>`;
+      return `<block s="receiveCondition">${formulaToSnap(f, ctx)}</block>`;
     }
     case "WhenBackgroundChangesScript":
       return `<block s="receiveGo"/>`;
@@ -562,8 +622,8 @@ function snapSprite(opts: {
   const { name, idx, id, scripts, vars, costumes, sounds, costumeIndex, x, y } = opts;
   return (
     `<sprite name="${esc(name)}" idx="${idx}" x="${x}" y="${y}" heading="90" scale="1" volume="100" pan="0" rotation="1" draggable="true" costume="${costumeIndex}" color="80,80,80,1" pen="tip" id="${id}">` +
-    `<costumes><list struct="atomic" id="${id + 1000}">${costumes}</list></costumes>` +
-    `<sounds><list struct="atomic" id="${id + 2000}">${sounds}</list></sounds>` +
+    `<costumes><list id="${id + 1000}">${costumes}</list></costumes>` +
+    `<sounds><list id="${id + 2000}">${sounds}</list></sounds>` +
     `<blocks></blocks><variables>${vars}</variables><scripts>${scripts}</scripts></sprite>`
   );
 }
@@ -584,7 +644,8 @@ export function convertCatrobatXml(
     count: () => {
       brickCount++;
     },
-    globals: new Set<string>(),
+    vars: new Set<string>(),
+    lists: new Set<string>(),
   };
 
   const doc = new DOMParser().parseFromString(xmlText, "text/xml");
@@ -597,22 +658,48 @@ export function convertCatrobatXml(
   const header = child(program, "header");
   const projectName = text(child(header, "programName")) || "Catrobat project";
 
-  // global variables
-  const globalVarsXml: string[] = [];
-  const progVarList = program.querySelector("programVariableList");
-  if (progVarList) {
-    for (const v of Array.from(progVarList.children)) {
-      const n = refName(v);
-      if (n) globalVarsXml.push(`<variable name="${esc(n)}"><l>0</l></variable>`);
+  /* ---- variable declarations -------------------------------------------
+   * Catrobat stores declarations in several places depending on the language
+   * version, and most of them are XStream references. Everything that is not
+   * declared anywhere but used by a brick is declared as a global, so Snap!
+   * never runs into "a variable of name … does not exist".                 */
+  const declared = new Set<string>();
+  const globalVarNames: string[] = [];
+  const globalListNames: string[] = [];
+
+  const q = (sel: string) => Array.from(program.querySelectorAll(sel)) as Element[];
+  const namesIn = (containers: (Element | null)[]) => {
+    const out: string[] = [];
+    for (const c of containers) {
+      if (!c) continue;
+      for (const v of Array.from(c.children)) {
+        const n = refName(v);
+        if (n) out.push(n);
+      }
     }
-  }
-  const progListList = program.querySelector("programListOfLists");
-  if (progListList) {
-    for (const v of Array.from(progListList.children)) {
-      const n = refName(v);
-      if (n) globalVarsXml.push(`<variable name="${esc(n)}"><list struct="atomic"></list></variable>`);
+    return out;
+  };
+  const declare = (names: string[], into: string[]) => {
+    for (const n of names) {
+      if (declared.has(n)) continue;
+      declared.add(n);
+      into.push(n);
     }
-  }
+  };
+
+  declare(
+    namesIn([...q("programVariableList"), ...q("data > userVariableList")]),
+    globalVarNames,
+  );
+  declare(
+    namesIn([...q("programListOfLists"), ...q("data > userListList")]),
+    globalListNames,
+  );
+
+  const varDecl = (n: string) => `<variable name="${esc(n)}"><l>0</l></variable>`;
+  const listDecl = (n: string) =>
+    `<variable name="${esc(n)}"><list></list></variable>`;
+
 
   // objects
   const objects: Element[] = [];
@@ -645,14 +732,26 @@ export function convertCatrobatXml(
       scriptCount++;
     }
 
-    // sprite-local variables
+    // sprite-local variables and lists (declared with a starting value of 0 /
+    // an empty list, so every block that reads them works right away)
     const localVars: string[] = [];
-    const uvl = child(obj, "userVariables") ?? obj.querySelector("userVariables");
-    if (uvl) {
-      for (const v of Array.from(uvl.children)) {
-        const n = refName(v);
-        if (n) localVars.push(`<variable name="${esc(n)}"><l>0</l></variable>`);
-      }
+    const objectVarNames = namesIn([
+      child(obj, "userVariables"),
+      child(obj, "userVariableList"),
+    ]);
+    for (const entry of q("objectVariableList > entry")) {
+      if (resolveRef(child(entry, "object")) !== obj) continue;
+      objectVarNames.push(...namesIn([child(entry, "list")]));
+    }
+    for (const n of objectVarNames) {
+      if (declared.has(n)) continue;
+      declared.add(n);
+      localVars.push(varDecl(n));
+    }
+    for (const n of namesIn([child(obj, "userLists"), child(obj, "userListList")])) {
+      if (declared.has(n)) continue;
+      declared.add(n);
+      localVars.push(listDecl(n));
     }
 
     // costumes (Catrobat "looks")
@@ -668,7 +767,7 @@ export function convertCatrobatXml(
       const cx = (item.width ?? 0) / 2;
       const cy = (item.height ?? 0) / 2;
       costumesXml.push(
-        `<costume name="${esc(lookName)}" center-x="${cx}" center-y="${cy}" image="${item.dataUrl}" id="${mediaId++}"/>`,
+        `<item><costume name="${esc(lookName)}" center-x="${cx}" center-y="${cy}" image="${item.dataUrl}" id="${mediaId++}"/></item>`,
       );
       costumeCount++;
     }
@@ -683,7 +782,9 @@ export function convertCatrobatXml(
         if (fileName || sndName) ctx.warn(`Sound "${fileName || sndName}" was not found in the archive.`);
         continue;
       }
-      soundsXml.push(`<sound name="${esc(sndName)}" sound="${item.dataUrl}" id="${mediaId++}"/>`);
+      soundsXml.push(
+        `<item><sound name="${esc(sndName)}" sound="${item.dataUrl}" id="${mediaId++}"/></item>`,
+      );
       soundCount++;
     }
 
@@ -705,6 +806,13 @@ export function convertCatrobatXml(
     id += 10;
   }
 
+  // anything a brick or formula referenced but nobody declared becomes a global
+  for (const n of ctx.vars) if (!declared.has(n)) { declared.add(n); globalVarNames.push(n); }
+  for (const n of ctx.lists) if (!declared.has(n)) { declared.add(n); globalListNames.push(n); }
+
+  const globalsXml =
+    globalVarNames.map(varDecl).join("") + globalListNames.map(listDecl).join("");
+
   if (spriteXml.length === 0) ctx.warn("The project contained no objects.");
   if (
     Object.keys(media.images).length === 0 &&
@@ -719,12 +827,12 @@ export function convertCatrobatXml(
     `<notes></notes><hidden></hidden><headers></headers><code></code><blocks></blocks>` +
     `<stage name="Stage" width="480" height="360" costume="0" color="255,255,255,1" tempo="60" threadsafe="false" penlog="false" volume="100" pan="0" lines="round" ternary="false" hyperops="true" codify="false" inheritance="true" sublistIDs="false" scheduled="false" id="1">` +
     `<pentrails></pentrails>` +
-    `<costumes><list struct="atomic" id="2"></list></costumes>` +
-    `<sounds><list struct="atomic" id="3"></list></sounds>` +
+    `<costumes><list id="2"></list></costumes>` +
+    `<sounds><list id="3"></list></sounds>` +
     `<blocks></blocks><variables></variables><scripts></scripts>` +
     `<sprites select="1">${spriteXml.join("")}</sprites>` +
     `</stage>` +
-    `<variables>${globalVarsXml.join("")}</variables>` +
+    `<variables>${globalsXml}</variables>` +
     `</scene></scenes></project>`;
 
   return {
