@@ -645,22 +645,48 @@ export function convertCatrobatXml(
   const header = child(program, "header");
   const projectName = text(child(header, "programName")) || "Catrobat project";
 
-  // global variables
-  const globalVarsXml: string[] = [];
-  const progVarList = program.querySelector("programVariableList");
-  if (progVarList) {
-    for (const v of Array.from(progVarList.children)) {
-      const n = refName(v);
-      if (n) globalVarsXml.push(`<variable name="${esc(n)}"><l>0</l></variable>`);
+  /* ---- variable declarations -------------------------------------------
+   * Catrobat stores declarations in several places depending on the language
+   * version, and most of them are XStream references. Everything that is not
+   * declared anywhere but used by a brick is declared as a global, so Snap!
+   * never runs into "a variable of name … does not exist".                 */
+  const declared = new Set<string>();
+  const globalVarNames: string[] = [];
+  const globalListNames: string[] = [];
+
+  const q = (sel: string) => Array.from(program.querySelectorAll(sel)) as Element[];
+  const namesIn = (containers: (Element | null)[]) => {
+    const out: string[] = [];
+    for (const c of containers) {
+      if (!c) continue;
+      for (const v of Array.from(c.children)) {
+        const n = refName(v);
+        if (n) out.push(n);
+      }
     }
-  }
-  const progListList = program.querySelector("programListOfLists");
-  if (progListList) {
-    for (const v of Array.from(progListList.children)) {
-      const n = refName(v);
-      if (n) globalVarsXml.push(`<variable name="${esc(n)}"><list struct="atomic"></list></variable>`);
+    return out;
+  };
+  const declare = (names: string[], into: string[]) => {
+    for (const n of names) {
+      if (declared.has(n)) continue;
+      declared.add(n);
+      into.push(n);
     }
-  }
+  };
+
+  declare(
+    namesIn([...q("programVariableList"), ...q("data > userVariableList")]),
+    globalVarNames,
+  );
+  declare(
+    namesIn([...q("programListOfLists"), ...q("data > userListList")]),
+    globalListNames,
+  );
+
+  const varDecl = (n: string) => `<variable name="${esc(n)}"><l>0</l></variable>`;
+  const listDecl = (n: string) =>
+    `<variable name="${esc(n)}"><list struct="atomic"></list></variable>`;
+
 
   // objects
   const objects: Element[] = [];
