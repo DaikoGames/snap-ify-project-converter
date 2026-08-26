@@ -812,6 +812,7 @@ export function convertCatrobatXml(
   for (const n of ctx.vars) if (!declared.has(n)) { declared.add(n); globalVarNames.push(n); }
   for (const n of ctx.lists) if (!declared.has(n)) { declared.add(n); globalListNames.push(n); }
 
+  console.error('DBG2', globalVarNames, globalListNames, [...declared]);
   const globalsXml =
     globalVarNames.map(varDecl).join("") + globalListNames.map(listDecl).join("");
 
