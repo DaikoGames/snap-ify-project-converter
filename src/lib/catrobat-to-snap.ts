@@ -689,8 +689,7 @@ export function convertCatrobatXml(
     }
     return out;
   };
-  const declare = (names: string[], into: string[]) => {
-    console.error('DBG3', names, into.length);
+  const declareAll = (names: string[], into: string[]) => {
     for (const n of names) {
       if (declared.has(n)) continue;
       declared.add(n);
@@ -698,11 +697,11 @@ export function convertCatrobatXml(
     }
   };
 
-  declare(
+  declareAll(
     namesIn([...q("programVariableList"), ...q("data > userVariableList")]),
     globalVarNames,
   );
-  declare(
+  declareAll(
     namesIn([...q("programListOfLists"), ...q("data > userListList")]),
     globalListNames,
   );
@@ -753,9 +752,8 @@ export function convertCatrobatXml(
       if (resolveRef(child(entry, "object")) !== obj) continue;
       objectVarNames.push(...namesIn([child(entry, "list")]));
     }
-    console.error('DBG', obj.tagName, objectVarNames);
-    declare(objectVarNames, globalVarNames);
-    declare(namesIn([child(obj, "userLists"), child(obj, "userListList")]), globalListNames);
+    declareAll(objectVarNames, globalVarNames);
+    declareAll(namesIn([child(obj, "userLists"), child(obj, "userListList")]), globalListNames);
 
     // costumes (Catrobat "looks")
     const costumesXml: string[] = [];
@@ -813,7 +811,6 @@ export function convertCatrobatXml(
   for (const n of ctx.vars) if (!declared.has(n)) { declared.add(n); globalVarNames.push(n); }
   for (const n of ctx.lists) if (!declared.has(n)) { declared.add(n); globalListNames.push(n); }
 
-  console.error('DBG2', globalVarNames, globalListNames, [...declared]);
   const globalsXml =
     globalVarNames.map(varDecl).join("") + globalListNames.map(listDecl).join("");
 
