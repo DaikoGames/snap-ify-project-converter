@@ -752,6 +752,7 @@ export function convertCatrobatXml(
       if (resolveRef(child(entry, "object")) !== obj) continue;
       objectVarNames.push(...namesIn([child(entry, "list")]));
     }
+    console.error('DBG', obj.tagName, objectVarNames);
     declare(objectVarNames, globalVarNames);
     declare(namesIn([child(obj, "userLists"), child(obj, "userListList")]), globalListNames);
 
