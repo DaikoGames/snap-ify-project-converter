@@ -220,6 +220,16 @@ function formulaToSnap(f: Element | null, ctx: FCtx): string {
           return `<block s="reportVariadicMax"><list>${a()}${b()}</list></block>`;
         case "JOIN":
           return `<block s="reportJoinWords"><list>${a()}${b()}</list></block>`;
+        case "LIST_ITEM":
+          return `<block s="reportListItem">${a()}${b()}</block>`;
+        case "NUMBER_OF_ITEMS":
+          return `<block s="reportListAttribute"><l><option>length</option></l>${a()}</block>`;
+        case "CONTAINS":
+          return `<block s="reportListContainsItem">${a()}${b()}</block>`;
+        case "INDEX_OF_ITEM":
+          return `<block s="reportListIndex">${b()}${a()}</block>`;
+        case "FLATTEN":
+          return `<block s="reportConcatenatedLists">${a()}</block>`;
         case "LENGTH":
           return `<block s="reportStringSize">${a()}</block>`;
         case "LETTER":
@@ -734,7 +744,6 @@ export function convertCatrobatXml(
 
     // sprite-local variables and lists (declared with a starting value of 0 /
     // an empty list, so every block that reads them works right away)
-    const localVars: string[] = [];
     const objectVarNames = namesIn([
       child(obj, "userVariables"),
       child(obj, "userVariableList"),
@@ -743,16 +752,8 @@ export function convertCatrobatXml(
       if (resolveRef(child(entry, "object")) !== obj) continue;
       objectVarNames.push(...namesIn([child(entry, "list")]));
     }
-    for (const n of objectVarNames) {
-      if (declared.has(n)) continue;
-      declared.add(n);
-      localVars.push(varDecl(n));
-    }
-    for (const n of namesIn([child(obj, "userLists"), child(obj, "userListList")])) {
-      if (declared.has(n)) continue;
-      declared.add(n);
-      localVars.push(listDecl(n));
-    }
+    declare(objectVarNames, globalVarNames);
+    declare(namesIn([child(obj, "userLists"), child(obj, "userListList")]), globalListNames);
 
     // costumes (Catrobat "looks")
     const costumesXml: string[] = [];
@@ -794,7 +795,7 @@ export function convertCatrobatXml(
         idx,
         id,
         scripts: scriptsXml.join(""),
-        vars: localVars.join(""),
+        vars: "",
         costumes: costumesXml.join(""),
         sounds: soundsXml.join(""),
         costumeIndex: costumesXml.length ? 1 : 0,
