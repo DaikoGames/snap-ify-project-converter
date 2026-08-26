@@ -690,6 +690,7 @@ export function convertCatrobatXml(
     return out;
   };
   const declare = (names: string[], into: string[]) => {
+    console.error('DBG3', names, into.length);
     for (const n of names) {
       if (declared.has(n)) continue;
       declared.add(n);
