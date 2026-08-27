@@ -205,15 +205,16 @@ function formulaToSnap(f: Element | null, ctx: FCtx): string {
     case "STRING":
       return `<l>${esc(value)}</l>`;
     case "USER_VARIABLE": {
-      const n = value || refName(child(f, "userVariable"));
-      if (n) ctx.vars.add(n);
-      return `<block var="${esc(n || "variable")}"/>`;
+      const n = value || refName(child(f, "userVariable"), warn) || "unresolved_var";
+      ctx.vars.add(n);
+      return `<block var="${esc(n)}"/>`;
     }
     case "USER_LIST": {
-      const n = value || refName(child(f, "userList"));
-      if (n) ctx.lists.add(n);
-      return `<block var="${esc(n || "list")}"/>`;
+      const n = value || refName(child(f, "userList"), warn) || "unresolved_list";
+      ctx.lists.add(n);
+      return `<block var="${esc(n)}"/>`;
     }
+
     case "BRACKET":
       return formulaToSnap(left ?? right, ctx);
     case "OPERATOR": {
