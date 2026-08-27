@@ -81,15 +81,44 @@ function resolveRef(el: Element | null, seen = new Set<Element>()): Element | nu
   const ref = el.getAttribute("reference");
   if (!ref) return el;
   seen.add(el);
-  const segs = ref.split("/");
-  // Exporters differ by one level of ".."; try the strict path first, then the
-  // shallower and the deeper variant before giving up.
-  const target =
-    walkRef(el, segs) ??
-    walkRef(el, segs.slice(1)) ??
-    walkRef(el, ["..", ...segs]);
-  return target ? resolveRef(target, seen) : null;
+
+  const raw = ref.split("/").filter((s) => s !== "" && s !== ".");
+  // Strip leading ".." — exporters disagree on how many levels up the path
+  // starts, so we instead try every ancestor as the base.
+  const segs = raw.filter((s) => s !== "..");
+  const upCount = raw.length - segs.length;
+
+  const bases: Element[] = [];
+  let cur: Element | null = el;
+  while (cur) {
+    bases.push(cur);
+    cur = cur.parentElement;
+  }
+
+  // Prefer the ancestor the exporter's ".." count points at, then widen out.
+  const ordered = [
+    ...bases.slice(upCount),
+    ...bases.slice(0, upCount).reverse(),
+  ];
+
+  for (const base of ordered) {
+    const target = walkRef(base, segs);
+    if (target && target !== el) return resolveRef(target, seen);
+  }
+  return null;
 }
+
+/** Deterministic stand-in name for a reference we could not resolve. */
+function placeholderName(el: Element): string {
+  const ref = el.getAttribute("reference") ?? "";
+  const slug = ref
+    .replace(/\.\.\//g, "")
+    .replace(/[^\w]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(-48);
+  return slug ? `unresolved_${slug}` : "unresolved_ref";
+}
+
 
 
 
