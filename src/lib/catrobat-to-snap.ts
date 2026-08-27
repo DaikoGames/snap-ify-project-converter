@@ -466,14 +466,15 @@ function bricksToSnap(brickList: Element | null, ctx: Ctx): string {
 function simpleBrick(b: Element, type: string, ctx: Ctx): string {
   const a = (c: string, fb = "0") => arg(b, c, ctx, fb);
   const userVar = () => {
-    const n = refName(child(b, "userVariable"));
-    if (n) ctx.vars.add(n);
+    const n = refName(child(b, "userVariable"), ctx.warn) || "unresolved_var";
+    ctx.vars.add(n);
     return n;
   };
   const userList = () => {
-    const n = refName(child(b, "userList"));
-    if (n) ctx.lists.add(n);
+    const n = refName(child(b, "userList"), ctx.warn) || "unresolved_list";
+    ctx.lists.add(n);
     return n;
+
   };
 
   switch (type) {
