@@ -414,11 +414,7 @@ function bricksArrayToSnap(list: Element[], ctx: Ctx): string {
         bucket.push(cur);
       }
       i++;
-      const wrap = (els: Element[]) => {
-        const holder = b.ownerDocument.createElement("brickList");
-        els.forEach((e) => holder.appendChild(e.cloneNode(true)));
-        return bricksToSnap(holder, ctx);
-      };
+      const wrap = (els: Element[]) => bricksArrayToSnap(els, ctx);
       out.push(
         hasElse
           ? `<block s="doIfElse">${cond}<script>${wrap(thenBody)}</script><script>${wrap(elseBody)}</script></block>`
@@ -446,9 +442,7 @@ function bricksArrayToSnap(list: Element[], ctx: Ctx): string {
         body.push(cur);
       }
       i++;
-      const holder = b.ownerDocument.createElement("brickList");
-      body.forEach((e) => holder.appendChild(e.cloneNode(true)));
-      const inner = bricksToSnap(holder, ctx);
+      const inner = bricksArrayToSnap(body, ctx);
       if (type === "ForeverBrick") out.push(`<block s="doForever"><script>${inner}</script></block>`);
       else if (type === "RepeatBrick")
         out.push(
