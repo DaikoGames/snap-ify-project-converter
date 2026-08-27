@@ -81,15 +81,44 @@ function resolveRef(el: Element | null, seen = new Set<Element>()): Element | nu
   const ref = el.getAttribute("reference");
   if (!ref) return el;
   seen.add(el);
-  const segs = ref.split("/");
-  // Exporters differ by one level of ".."; try the strict path first, then the
-  // shallower and the deeper variant before giving up.
-  const target =
-    walkRef(el, segs) ??
-    walkRef(el, segs.slice(1)) ??
-    walkRef(el, ["..", ...segs]);
-  return target ? resolveRef(target, seen) : null;
+
+  const raw = ref.split("/").filter((s) => s !== "" && s !== ".");
+  // Strip leading ".." — exporters disagree on how many levels up the path
+  // starts, so we instead try every ancestor as the base.
+  const segs = raw.filter((s) => s !== "..");
+  const upCount = raw.length - segs.length;
+
+  const bases: Element[] = [];
+  let cur: Element | null = el;
+  while (cur) {
+    bases.push(cur);
+    cur = cur.parentElement;
+  }
+
+  // Prefer the ancestor the exporter's ".." count points at, then widen out.
+  const ordered = [
+    ...bases.slice(upCount),
+    ...bases.slice(0, upCount).reverse(),
+  ];
+
+  for (const base of ordered) {
+    const target = walkRef(base, segs);
+    if (target && target !== el) return resolveRef(target, seen);
+  }
+  return null;
 }
+
+/** Deterministic stand-in name for a reference we could not resolve. */
+function placeholderName(el: Element): string {
+  const ref = el.getAttribute("reference") ?? "";
+  const slug = ref
+    .replace(/\.\.\//g, "")
+    .replace(/[^\w]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(-48);
+  return slug ? `unresolved_${slug}` : "unresolved_ref";
+}
+
 
 
 
@@ -176,15 +205,16 @@ function formulaToSnap(f: Element | null, ctx: FCtx): string {
     case "STRING":
       return `<l>${esc(value)}</l>`;
     case "USER_VARIABLE": {
-      const n = value || refName(child(f, "userVariable"));
-      if (n) ctx.vars.add(n);
-      return `<block var="${esc(n || "variable")}"/>`;
+      const n = value || refName(child(f, "userVariable"), warn) || "unresolved_var";
+      ctx.vars.add(n);
+      return `<block var="${esc(n)}"/>`;
     }
     case "USER_LIST": {
-      const n = value || refName(child(f, "userList"));
-      if (n) ctx.lists.add(n);
-      return `<block var="${esc(n || "list")}"/>`;
+      const n = value || refName(child(f, "userList"), warn) || "unresolved_list";
+      ctx.lists.add(n);
+      return `<block var="${esc(n)}"/>`;
     }
+
     case "BRACKET":
       return formulaToSnap(left ?? right, ctx);
     case "OPERATOR": {
@@ -326,18 +356,32 @@ type Ctx = FCtx & {
   count: () => void;
 };
 
-function refName(elIn: Element | null): string {
+function refName(elIn: Element | null, warn?: (m: string) => void): string {
+  if (!elIn) return "";
   const el = resolveRef(elIn);
-  if (!el) return "";
+  if (!el) {
+    const ph = placeholderName(elIn);
+    warn?.(`Could not resolve reference "${elIn.getAttribute("reference")}" — using "${ph}"`);
+    return ph;
+  }
   const n = child(el, "name");
   if (n) return text(n);
   const attr = el.getAttribute("name");
   return attr ?? text(el);
 }
 
+
 function bricksToSnap(brickList: Element | null, ctx: Ctx): string {
-  const list = brickList ? children(brickList, "brick") : [];
+  return bricksArrayToSnap(brickList ? children(brickList, "brick") : [], ctx);
+}
+
+/**
+ * Works on the original brick elements (never clones) — cloning into a
+ * detached holder would break every XStream `reference="../.."` path.
+ */
+function bricksArrayToSnap(list: Element[], ctx: Ctx): string {
   const out: string[] = [];
+
   let i = 0;
 
   while (i < list.length) {
@@ -370,11 +414,7 @@ function bricksToSnap(brickList: Element | null, ctx: Ctx): string {
         bucket.push(cur);
       }
       i++;
-      const wrap = (els: Element[]) => {
-        const holder = b.ownerDocument.createElement("brickList");
-        els.forEach((e) => holder.appendChild(e.cloneNode(true)));
-        return bricksToSnap(holder, ctx);
-      };
+      const wrap = (els: Element[]) => bricksArrayToSnap(els, ctx);
       out.push(
         hasElse
           ? `<block s="doIfElse">${cond}<script>${wrap(thenBody)}</script><script>${wrap(elseBody)}</script></block>`
@@ -402,9 +442,7 @@ function bricksToSnap(brickList: Element | null, ctx: Ctx): string {
         body.push(cur);
       }
       i++;
-      const holder = b.ownerDocument.createElement("brickList");
-      body.forEach((e) => holder.appendChild(e.cloneNode(true)));
-      const inner = bricksToSnap(holder, ctx);
+      const inner = bricksArrayToSnap(body, ctx);
       if (type === "ForeverBrick") out.push(`<block s="doForever"><script>${inner}</script></block>`);
       else if (type === "RepeatBrick")
         out.push(
@@ -430,14 +468,15 @@ function bricksToSnap(brickList: Element | null, ctx: Ctx): string {
 function simpleBrick(b: Element, type: string, ctx: Ctx): string {
   const a = (c: string, fb = "0") => arg(b, c, ctx, fb);
   const userVar = () => {
-    const n = refName(child(b, "userVariable"));
-    if (n) ctx.vars.add(n);
+    const n = refName(child(b, "userVariable"), ctx.warn) || "unresolved_var";
+    ctx.vars.add(n);
     return n;
   };
   const userList = () => {
-    const n = refName(child(b, "userList"));
-    if (n) ctx.lists.add(n);
+    const n = refName(child(b, "userList"), ctx.warn) || "unresolved_list";
+    ctx.lists.add(n);
     return n;
+
   };
 
   switch (type) {
@@ -551,22 +590,22 @@ function simpleBrick(b: Element, type: string, ctx: Ctx): string {
 
     /* variables & lists */
     case "SetVariableBrick":
-      return `<block s="doSetVar"><l>${esc(userVar() || "variable")}</l>${a("VARIABLE", "0")}</block>`;
+      return `<block s="doSetVar"><l>${esc(userVar())}</l>${a("VARIABLE", "0")}</block>`;
     case "ChangeVariableBrick":
-      return `<block s="doChangeVar"><l>${esc(userVar() || "variable")}</l>${a("VARIABLE", "1")}</block>`;
+      return `<block s="doChangeVar"><l>${esc(userVar())}</l>${a("VARIABLE", "1")}</block>`;
     case "ShowTextBrick":
     case "ShowTextColorSizeAlignmentBrick":
-      return `<block s="doShowVar"><l>${esc(userVar() || "variable")}</l></block>`;
+      return `<block s="doShowVar"><l>${esc(userVar())}</l></block>`;
     case "HideTextBrick":
-      return `<block s="doHideVar"><l>${esc(userVar() || "variable")}</l></block>`;
+      return `<block s="doHideVar"><l>${esc(userVar())}</l></block>`;
     case "AddItemToUserListBrick":
-      return `<block s="doAddToList">${a("LIST_ADD_ITEM", "thing")}<block var="${esc(userList() || "list")}"/></block>`;
+      return `<block s="doAddToList">${a("LIST_ADD_ITEM", "thing")}<block var="${esc(userList())}"/></block>`;
     case "DeleteItemOfUserListBrick":
-      return `<block s="doDeleteFromList">${a("LIST_DELETE_ITEM", "1")}<block var="${esc(userList() || "list")}"/></block>`;
+      return `<block s="doDeleteFromList">${a("LIST_DELETE_ITEM", "1")}<block var="${esc(userList())}"/></block>`;
     case "InsertItemIntoUserListBrick":
-      return `<block s="doInsertInList">${a("INSERT_ITEM_INTO_USERLIST_VALUE", "thing")}${a("INSERT_ITEM_INTO_USERLIST_INDEX", "1")}<block var="${esc(userList() || "list")}"/></block>`;
+      return `<block s="doInsertInList">${a("INSERT_ITEM_INTO_USERLIST_VALUE", "thing")}${a("INSERT_ITEM_INTO_USERLIST_INDEX", "1")}<block var="${esc(userList())}"/></block>`;
     case "ReplaceItemInUserListBrick":
-      return `<block s="doReplaceInList">${a("REPLACE_ITEM_IN_USERLIST_INDEX", "1")}<block var="${esc(userList() || "list")}"/>${a("REPLACE_ITEM_IN_USERLIST_VALUE", "thing")}</block>`;
+      return `<block s="doReplaceInList">${a("REPLACE_ITEM_IN_USERLIST_INDEX", "1")}<block var="${esc(userList())}"/>${a("REPLACE_ITEM_IN_USERLIST_VALUE", "thing")}</block>`;
 
     default: {
       ctx.unsupported[type] = (ctx.unsupported[type] ?? 0) + 1;
