@@ -372,8 +372,16 @@ function refName(elIn: Element | null, warn?: (m: string) => void): string {
 
 
 function bricksToSnap(brickList: Element | null, ctx: Ctx): string {
-  const list = brickList ? children(brickList, "brick") : [];
+  return bricksArrayToSnap(brickList ? children(brickList, "brick") : [], ctx);
+}
+
+/**
+ * Works on the original brick elements (never clones) — cloning into a
+ * detached holder would break every XStream `reference="../.."` path.
+ */
+function bricksArrayToSnap(list: Element[], ctx: Ctx): string {
   const out: string[] = [];
+
   let i = 0;
 
   while (i < list.length) {
