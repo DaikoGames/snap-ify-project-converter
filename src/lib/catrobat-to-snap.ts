@@ -355,14 +355,20 @@ type Ctx = FCtx & {
   count: () => void;
 };
 
-function refName(elIn: Element | null): string {
+function refName(elIn: Element | null, warn?: (m: string) => void): string {
+  if (!elIn) return "";
   const el = resolveRef(elIn);
-  if (!el) return "";
+  if (!el) {
+    const ph = placeholderName(elIn);
+    warn?.(`Could not resolve reference "${elIn.getAttribute("reference")}" — using "${ph}"`);
+    return ph;
+  }
   const n = child(el, "name");
   if (n) return text(n);
   const attr = el.getAttribute("name");
   return attr ?? text(el);
 }
+
 
 function bricksToSnap(brickList: Element | null, ctx: Ctx): string {
   const list = brickList ? children(brickList, "brick") : [];
