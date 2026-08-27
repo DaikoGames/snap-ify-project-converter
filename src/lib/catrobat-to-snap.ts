@@ -588,22 +588,22 @@ function simpleBrick(b: Element, type: string, ctx: Ctx): string {
 
     /* variables & lists */
     case "SetVariableBrick":
-      return `<block s="doSetVar"><l>${esc(userVar() || "variable")}</l>${a("VARIABLE", "0")}</block>`;
+      return `<block s="doSetVar"><l>${esc(userVar())}</l>${a("VARIABLE", "0")}</block>`;
     case "ChangeVariableBrick":
-      return `<block s="doChangeVar"><l>${esc(userVar() || "variable")}</l>${a("VARIABLE", "1")}</block>`;
+      return `<block s="doChangeVar"><l>${esc(userVar())}</l>${a("VARIABLE", "1")}</block>`;
     case "ShowTextBrick":
     case "ShowTextColorSizeAlignmentBrick":
-      return `<block s="doShowVar"><l>${esc(userVar() || "variable")}</l></block>`;
+      return `<block s="doShowVar"><l>${esc(userVar())}</l></block>`;
     case "HideTextBrick":
-      return `<block s="doHideVar"><l>${esc(userVar() || "variable")}</l></block>`;
+      return `<block s="doHideVar"><l>${esc(userVar())}</l></block>`;
     case "AddItemToUserListBrick":
-      return `<block s="doAddToList">${a("LIST_ADD_ITEM", "thing")}<block var="${esc(userList() || "list")}"/></block>`;
+      return `<block s="doAddToList">${a("LIST_ADD_ITEM", "thing")}<block var="${esc(userList())}"/></block>`;
     case "DeleteItemOfUserListBrick":
-      return `<block s="doDeleteFromList">${a("LIST_DELETE_ITEM", "1")}<block var="${esc(userList() || "list")}"/></block>`;
+      return `<block s="doDeleteFromList">${a("LIST_DELETE_ITEM", "1")}<block var="${esc(userList())}"/></block>`;
     case "InsertItemIntoUserListBrick":
-      return `<block s="doInsertInList">${a("INSERT_ITEM_INTO_USERLIST_VALUE", "thing")}${a("INSERT_ITEM_INTO_USERLIST_INDEX", "1")}<block var="${esc(userList() || "list")}"/></block>`;
+      return `<block s="doInsertInList">${a("INSERT_ITEM_INTO_USERLIST_VALUE", "thing")}${a("INSERT_ITEM_INTO_USERLIST_INDEX", "1")}<block var="${esc(userList())}"/></block>`;
     case "ReplaceItemInUserListBrick":
-      return `<block s="doReplaceInList">${a("REPLACE_ITEM_IN_USERLIST_INDEX", "1")}<block var="${esc(userList() || "list")}"/>${a("REPLACE_ITEM_IN_USERLIST_VALUE", "thing")}</block>`;
+      return `<block s="doReplaceInList">${a("REPLACE_ITEM_IN_USERLIST_INDEX", "1")}<block var="${esc(userList())}"/>${a("REPLACE_ITEM_IN_USERLIST_VALUE", "thing")}</block>`;
 
     default: {
       ctx.unsupported[type] = (ctx.unsupported[type] ?? 0) + 1;
