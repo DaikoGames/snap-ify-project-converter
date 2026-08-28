@@ -191,7 +191,17 @@ type FCtx = {
   lists: Set<string>;
   /** phone pixels -> Snap! stage units */
   scale: number;
+  /** original Catrobat screen size in phone pixels */
+  screenW: number;
+  screenH: number;
 };
+
+/** Snap! stage units -> phone pixels, so formulas keep their phone maths. */
+function unscale(inner: string, ctx: FCtx) {
+  if (ctx.scale === 1) return inner;
+  return `<block s="reportQuotient">${inner}<l>${Math.round(ctx.scale * 100) / 100}</l></block>`;
+}
+
 
 function formulaToSnap(f: Element | null, ctx: FCtx): string {
   const warn = ctx.warn;
