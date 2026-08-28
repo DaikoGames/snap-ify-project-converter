@@ -503,17 +503,17 @@ function simpleBrick(b: Element, type: string, ctx: Ctx): string {
   switch (type) {
     /* motion */
     case "PlaceAtBrick":
-      return `<block s="gotoXY">${a("X_POSITION")}${a("Y_POSITION")}</block>`;
+      return `<block s="gotoXY">${p("X_POSITION")}${p("Y_POSITION")}</block>`;
     case "SetXBrick":
-      return `<block s="setXPosition">${a("X_POSITION")}</block>`;
+      return `<block s="setXPosition">${p("X_POSITION")}</block>`;
     case "SetYBrick":
-      return `<block s="setYPosition">${a("Y_POSITION")}</block>`;
+      return `<block s="setYPosition">${p("Y_POSITION")}</block>`;
     case "ChangeXByNBrick":
-      return `<block s="changeXPosition">${a("X_POSITION_CHANGE")}</block>`;
+      return `<block s="changeXPosition">${p("X_POSITION_CHANGE")}</block>`;
     case "ChangeYByNBrick":
-      return `<block s="changeYPosition">${a("Y_POSITION_CHANGE")}</block>`;
+      return `<block s="changeYPosition">${p("Y_POSITION_CHANGE")}</block>`;
     case "MoveNStepsBrick":
-      return `<block s="forward">${a("STEPS")}</block>`;
+      return `<block s="forward">${p("STEPS")}</block>`;
     case "TurnLeftBrick":
       return `<block s="turnLeft">${a("TURN_LEFT_DEGREES", "15")}</block>`;
     case "TurnRightBrick":
