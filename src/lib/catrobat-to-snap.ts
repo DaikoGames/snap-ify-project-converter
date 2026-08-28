@@ -464,14 +464,20 @@ function bricksArrayToSnap(list: Element[], ctx: Ctx): string {
       }
       i++;
       const inner = bricksArrayToSnap(body, ctx);
+      // Bounded loops whose body never waits/yields run much faster in warp.
+      const yields = /doWait|doBroadcast|doGlide|doForever|doUntil|doRepeat|doAsk|doPlaySoundUntilDone/.test(
+        inner,
+      );
+      const fast = (s: string) =>
+        yields || !s ? s : `<block s="warp"><script>${s}</script></block>`;
       if (type === "ForeverBrick") out.push(`<block s="doForever"><script>${inner}</script></block>`);
       else if (type === "RepeatBrick")
         out.push(
-          `<block s="doRepeat">${arg(b, "TIMES_TO_REPEAT", ctx, "10")}<script>${inner}</script></block>`,
+          `<block s="doRepeat">${arg(b, "TIMES_TO_REPEAT", ctx, "10")}<script>${fast(inner)}</script></block>`,
         );
       else
         out.push(
-          `<block s="doUntil">${arg(b, "REPEAT_UNTIL_CONDITION", ctx)}<script>${inner}</script></block>`,
+          `<block s="doUntil">${arg(b, "REPEAT_UNTIL_CONDITION", ctx)}<script>${fast(inner)}</script></block>`,
         );
       continue;
     }
