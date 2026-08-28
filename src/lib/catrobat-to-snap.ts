@@ -191,7 +191,17 @@ type FCtx = {
   lists: Set<string>;
   /** phone pixels -> Snap! stage units */
   scale: number;
+  /** original Catrobat screen size in phone pixels */
+  screenW: number;
+  screenH: number;
 };
+
+/** Snap! stage units -> phone pixels, so formulas keep their phone maths. */
+function unscale(inner: string, ctx: FCtx) {
+  if (ctx.scale === 1) return inner;
+  return `<block s="reportQuotient">${inner}<l>${Math.round(ctx.scale * 100) / 100}</l></block>`;
+}
+
 
 function formulaToSnap(f: Element | null, ctx: FCtx): string {
   const warn = ctx.warn;
@@ -284,13 +294,13 @@ function formulaToSnap(f: Element | null, ctx: FCtx): string {
     case "SENSOR": {
       switch (value) {
         case "OBJECT_X":
-          return `<block s="xPosition"/>`;
+          return unscale(`<block s="xPosition"/>`, ctx);
         case "OBJECT_Y":
-          return `<block s="yPosition"/>`;
+          return unscale(`<block s="yPosition"/>`, ctx);
         case "OBJECT_ROTATION":
           return `<block s="direction"/>`;
         case "OBJECT_SIZE":
-          return `<block s="getScale"/>`;
+          return unscale(`<block s="getScale"/>`, ctx);
         case "OBJECT_TRANSPARENCY":
           return `<block s="getEffect"><l><option>ghost</option></l></block>`;
         case "OBJECT_BRIGHTNESS":
@@ -298,9 +308,9 @@ function formulaToSnap(f: Element | null, ctx: FCtx): string {
         case "TIMER":
           return `<block s="getTimer"/>`;
         case "FINGER_X":
-          return `<block s="reportMouseX"/>`;
+          return unscale(`<block s="reportMouseX"/>`, ctx);
         case "FINGER_Y":
-          return `<block s="reportMouseY"/>`;
+          return unscale(`<block s="reportMouseY"/>`, ctx);
         case "FINGER_TOUCHED":
           return `<block s="reportMouseDown"/>`;
         // The mouse *is* the phone: moving it right/left/up/down tilts the
@@ -546,10 +556,12 @@ function simpleBrick(b: Element, type: string, ctx: Ctx): string {
       return `<block s="show"/>`;
     case "HideBrick":
       return `<block s="hide"/>`;
+    // Costumes are phone-sized bitmaps shown at `scale`, so a Catrobat
+    // "set size to 100 %" must become "set size to 100 * scale %" in Snap!.
     case "SetSizeToBrick":
-      return `<block s="setScale">${a("SIZE", "100")}</block>`;
+      return `<block s="setScale">${p("SIZE", "100")}</block>`;
     case "ChangeSizeByNBrick":
-      return `<block s="changeScale">${a("SIZE_CHANGE", "10")}</block>`;
+      return `<block s="changeScale">${p("SIZE_CHANGE", "10")}</block>`;
     case "SetTransparencyBrick":
     case "SetGhostEffectBrick":
       return `<block s="setEffect"><l><option>ghost</option></l>${a("TRANSPARENCY", "0")}</block>`;
@@ -578,7 +590,7 @@ function simpleBrick(b: Element, type: string, ctx: Ctx): string {
     case "PenUpBrick":
       return `<block s="up"/>`;
     case "SetPenSizeBrick":
-      return `<block s="setSize">${a("PEN_SIZE", "1")}</block>`;
+      return `<block s="setSize">${p("PEN_SIZE", "1")}</block>`;
     case "ClearBackgroundBrick":
       return `<block s="clear"/>`;
     case "StampBrick":
