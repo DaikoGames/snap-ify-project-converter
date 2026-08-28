@@ -488,6 +488,7 @@ function bricksArrayToSnap(list: Element[], ctx: Ctx): string {
 
 function simpleBrick(b: Element, type: string, ctx: Ctx): string {
   const a = (c: string, fb = "0") => arg(b, c, ctx, fb);
+  const p = (c: string, fb = "0") => posArg(b, c, ctx, fb);
   const userVar = () => {
     const n = refName(child(b, "userVariable"), ctx.warn) || "unresolved_var";
     ctx.vars.add(n);
