@@ -523,7 +523,7 @@ function simpleBrick(b: Element, type: string, ctx: Ctx): string {
     case "PointToBrick":
       return `<block s="doFaceTowards"><l><option>mouse-pointer</option></l></block>`;
     case "GlideToBrick":
-      return `<block s="doGlide">${a("DURATION_IN_SECONDS", "1")}${a("X_DESTINATION")}${a("Y_DESTINATION")}</block>`;
+      return `<block s="doGlide">${a("DURATION_IN_SECONDS", "1")}${p("X_DESTINATION")}${p("Y_DESTINATION")}</block>`;
     case "IfOnEdgeBounceBrick":
       return `<block s="bounceOffEdge"/>`;
 
