@@ -189,6 +189,8 @@ type FCtx = {
   warn: (m: string) => void;
   vars: Set<string>;
   lists: Set<string>;
+  /** phone pixels -> Snap! stage units */
+  scale: number;
 };
 
 function formulaToSnap(f: Element | null, ctx: FCtx): string {
@@ -349,6 +351,25 @@ function arg(brick: Element, category: string, ctx: FCtx, fallback = "0") {
   return formulaToSnap(f, ctx);
 }
 
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * Position arguments are phone pixels — scale them down to Snap!'s 480x360
+ * stage. Plain numbers are multiplied in place, expressions get a "x * scale".
+ */
+function posArg(brick: Element, category: string, ctx: FCtx, fallback = "0") {
+  const s = ctx.scale;
+  const f = formulaOf(brick, category);
+  if (!f) return `<l>${esc(String(round2((Number(fallback) || 0) * s)))}</l>`;
+  if (s === 1) return formulaToSnap(f, ctx);
+  if (text(child(f, "type")) === "NUMBER") {
+    const v = Number(num(text(child(f, "value")))) || 0;
+    return `<l>${esc(String(round2(v * s)))}</l>`;
+  }
+  return `<block s="reportVariadicProduct"><list>${formulaToSnap(f, ctx)}<l>${round2(s)}</l></list></block>`;
+}
+
+
 /* ----------------------------------------------------------------- bricks */
 
 type Ctx = FCtx & {
@@ -443,14 +464,20 @@ function bricksArrayToSnap(list: Element[], ctx: Ctx): string {
       }
       i++;
       const inner = bricksArrayToSnap(body, ctx);
+      // Bounded loops whose body never waits/yields run much faster in warp.
+      const yields = /doWait|doBroadcast|doGlide|doForever|doUntil|doRepeat|doAsk|doPlaySoundUntilDone/.test(
+        inner,
+      );
+      const fast = (s: string) =>
+        yields || !s ? s : `<block s="warp"><script>${s}</script></block>`;
       if (type === "ForeverBrick") out.push(`<block s="doForever"><script>${inner}</script></block>`);
       else if (type === "RepeatBrick")
         out.push(
-          `<block s="doRepeat">${arg(b, "TIMES_TO_REPEAT", ctx, "10")}<script>${inner}</script></block>`,
+          `<block s="doRepeat">${arg(b, "TIMES_TO_REPEAT", ctx, "10")}<script>${fast(inner)}</script></block>`,
         );
       else
         out.push(
-          `<block s="doUntil">${arg(b, "REPEAT_UNTIL_CONDITION", ctx)}<script>${inner}</script></block>`,
+          `<block s="doUntil">${arg(b, "REPEAT_UNTIL_CONDITION", ctx)}<script>${fast(inner)}</script></block>`,
         );
       continue;
     }
@@ -467,6 +494,7 @@ function bricksArrayToSnap(list: Element[], ctx: Ctx): string {
 
 function simpleBrick(b: Element, type: string, ctx: Ctx): string {
   const a = (c: string, fb = "0") => arg(b, c, ctx, fb);
+  const p = (c: string, fb = "0") => posArg(b, c, ctx, fb);
   const userVar = () => {
     const n = refName(child(b, "userVariable"), ctx.warn) || "unresolved_var";
     ctx.vars.add(n);
@@ -482,17 +510,17 @@ function simpleBrick(b: Element, type: string, ctx: Ctx): string {
   switch (type) {
     /* motion */
     case "PlaceAtBrick":
-      return `<block s="gotoXY">${a("X_POSITION")}${a("Y_POSITION")}</block>`;
+      return `<block s="gotoXY">${p("X_POSITION")}${p("Y_POSITION")}</block>`;
     case "SetXBrick":
-      return `<block s="setXPosition">${a("X_POSITION")}</block>`;
+      return `<block s="setXPosition">${p("X_POSITION")}</block>`;
     case "SetYBrick":
-      return `<block s="setYPosition">${a("Y_POSITION")}</block>`;
+      return `<block s="setYPosition">${p("Y_POSITION")}</block>`;
     case "ChangeXByNBrick":
-      return `<block s="changeXPosition">${a("X_POSITION_CHANGE")}</block>`;
+      return `<block s="changeXPosition">${p("X_POSITION_CHANGE")}</block>`;
     case "ChangeYByNBrick":
-      return `<block s="changeYPosition">${a("Y_POSITION_CHANGE")}</block>`;
+      return `<block s="changeYPosition">${p("Y_POSITION_CHANGE")}</block>`;
     case "MoveNStepsBrick":
-      return `<block s="forward">${a("STEPS")}</block>`;
+      return `<block s="forward">${p("STEPS")}</block>`;
     case "TurnLeftBrick":
       return `<block s="turnLeft">${a("TURN_LEFT_DEGREES", "15")}</block>`;
     case "TurnRightBrick":
@@ -502,7 +530,7 @@ function simpleBrick(b: Element, type: string, ctx: Ctx): string {
     case "PointToBrick":
       return `<block s="doFaceTowards"><l><option>mouse-pointer</option></l></block>`;
     case "GlideToBrick":
-      return `<block s="doGlide">${a("DURATION_IN_SECONDS", "1")}${a("X_DESTINATION")}${a("Y_DESTINATION")}</block>`;
+      return `<block s="doGlide">${a("DURATION_IN_SECONDS", "1")}${p("X_DESTINATION")}${p("Y_DESTINATION")}</block>`;
     case "IfOnEdgeBounceBrick":
       return `<block s="bounceOffEdge"/>`;
 
@@ -667,10 +695,11 @@ function snapSprite(opts: {
   costumeIndex: number;
   x: number;
   y: number;
+  scale: number;
 }) {
-  const { name, idx, id, scripts, vars, costumes, sounds, costumeIndex, x, y } = opts;
+  const { name, idx, id, scripts, vars, costumes, sounds, costumeIndex, x, y, scale } = opts;
   return (
-    `<sprite name="${esc(name)}" idx="${idx}" x="${x}" y="${y}" heading="90" scale="1" volume="100" pan="0" rotation="1" draggable="true" costume="${costumeIndex}" color="80,80,80,1" pen="tip" id="${id}">` +
+    `<sprite name="${esc(name)}" idx="${idx}" x="${x}" y="${y}" heading="90" scale="${scale}" volume="100" pan="0" rotation="1" draggable="true" costume="${costumeIndex}" color="80,80,80,1" pen="tip" id="${id}">` +
     `<costumes><list id="${id + 1000}">${costumes}</list></costumes>` +
     `<sounds><list id="${id + 2000}">${sounds}</list></sounds>` +
     `<blocks></blocks><variables>${vars}</variables><scripts>${scripts}</scripts></sprite>`
@@ -695,6 +724,7 @@ export function convertCatrobatXml(
     },
     vars: new Set<string>(),
     lists: new Set<string>(),
+    scale: 1,
   };
 
   const doc = new DOMParser().parseFromString(xmlText, "text/xml");
@@ -706,6 +736,18 @@ export function convertCatrobatXml(
 
   const header = child(program, "header");
   const projectName = text(child(header, "programName")) || "Catrobat project";
+
+  /* Phone pixels -> Snap! stage units (480x360), keeping the aspect ratio. */
+  const screenW = Number(text(child(header, "screenWidth"))) || 0;
+  const screenH = Number(text(child(header, "screenHeight"))) || 0;
+  const stageScale =
+    screenW > 0 && screenH > 0 ? Math.min(480 / screenW, 360 / screenH) : 1;
+  ctx.scale = stageScale;
+  if (stageScale !== 1)
+    ctx.warn(
+      `Project screen is ${screenW}x${screenH}; positions and costumes were scaled by ${round2(stageScale)} to fit Snap!'s 480x360 stage.`,
+    );
+
 
   /* ---- variable declarations -------------------------------------------
    * Catrobat stores declarations in several places depending on the language
@@ -840,6 +882,7 @@ export function convertCatrobatXml(
         costumeIndex: costumesXml.length ? 1 : 0,
         x: 0,
         y: 0,
+        scale: round2(stageScale),
       }),
     );
     idx++;
