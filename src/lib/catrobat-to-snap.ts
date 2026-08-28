@@ -718,6 +718,7 @@ export function convertCatrobatXml(
     },
     vars: new Set<string>(),
     lists: new Set<string>(),
+    scale: 1,
   };
 
   const doc = new DOMParser().parseFromString(xmlText, "text/xml");
@@ -729,6 +730,18 @@ export function convertCatrobatXml(
 
   const header = child(program, "header");
   const projectName = text(child(header, "programName")) || "Catrobat project";
+
+  /* Phone pixels -> Snap! stage units (480x360), keeping the aspect ratio. */
+  const screenW = Number(text(child(header, "screenWidth"))) || 0;
+  const screenH = Number(text(child(header, "screenHeight"))) || 0;
+  const stageScale =
+    screenW > 0 && screenH > 0 ? Math.min(480 / screenW, 360 / screenH) : 1;
+  ctx.scale = stageScale;
+  if (stageScale !== 1)
+    ctx.warn(
+      `Project screen is ${screenW}x${screenH}; positions and costumes were scaled by ${round2(stageScale)} to fit Snap!'s 480x360 stage.`,
+    );
+
 
   /* ---- variable declarations -------------------------------------------
    * Catrobat stores declarations in several places depending on the language
