@@ -689,10 +689,11 @@ function snapSprite(opts: {
   costumeIndex: number;
   x: number;
   y: number;
+  scale: number;
 }) {
-  const { name, idx, id, scripts, vars, costumes, sounds, costumeIndex, x, y } = opts;
+  const { name, idx, id, scripts, vars, costumes, sounds, costumeIndex, x, y, scale } = opts;
   return (
-    `<sprite name="${esc(name)}" idx="${idx}" x="${x}" y="${y}" heading="90" scale="1" volume="100" pan="0" rotation="1" draggable="true" costume="${costumeIndex}" color="80,80,80,1" pen="tip" id="${id}">` +
+    `<sprite name="${esc(name)}" idx="${idx}" x="${x}" y="${y}" heading="90" scale="${scale}" volume="100" pan="0" rotation="1" draggable="true" costume="${costumeIndex}" color="80,80,80,1" pen="tip" id="${id}">` +
     `<costumes><list id="${id + 1000}">${costumes}</list></costumes>` +
     `<sounds><list id="${id + 2000}">${sounds}</list></sounds>` +
     `<blocks></blocks><variables>${vars}</variables><scripts>${scripts}</scripts></sprite>`
