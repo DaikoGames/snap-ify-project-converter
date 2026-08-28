@@ -294,13 +294,13 @@ function formulaToSnap(f: Element | null, ctx: FCtx): string {
     case "SENSOR": {
       switch (value) {
         case "OBJECT_X":
-          return `<block s="xPosition"/>`;
+          return unscale(`<block s="xPosition"/>`, ctx);
         case "OBJECT_Y":
-          return `<block s="yPosition"/>`;
+          return unscale(`<block s="yPosition"/>`, ctx);
         case "OBJECT_ROTATION":
           return `<block s="direction"/>`;
         case "OBJECT_SIZE":
-          return `<block s="getScale"/>`;
+          return unscale(`<block s="getScale"/>`, ctx);
         case "OBJECT_TRANSPARENCY":
           return `<block s="getEffect"><l><option>ghost</option></l></block>`;
         case "OBJECT_BRIGHTNESS":
@@ -308,9 +308,9 @@ function formulaToSnap(f: Element | null, ctx: FCtx): string {
         case "TIMER":
           return `<block s="getTimer"/>`;
         case "FINGER_X":
-          return `<block s="reportMouseX"/>`;
+          return unscale(`<block s="reportMouseX"/>`, ctx);
         case "FINGER_Y":
-          return `<block s="reportMouseY"/>`;
+          return unscale(`<block s="reportMouseY"/>`, ctx);
         case "FINGER_TOUCHED":
           return `<block s="reportMouseDown"/>`;
         // The mouse *is* the phone: moving it right/left/up/down tilts the
