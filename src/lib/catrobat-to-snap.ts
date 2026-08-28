@@ -580,7 +580,7 @@ function simpleBrick(b: Element, type: string, ctx: Ctx): string {
     case "PenUpBrick":
       return `<block s="up"/>`;
     case "SetPenSizeBrick":
-      return `<block s="setSize">${a("PEN_SIZE", "1")}</block>`;
+      return `<block s="setSize">${p("PEN_SIZE", "1")}</block>`;
     case "ClearBackgroundBrick":
       return `<block s="clear"/>`;
     case "StampBrick":
