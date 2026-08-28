@@ -189,6 +189,8 @@ type FCtx = {
   warn: (m: string) => void;
   vars: Set<string>;
   lists: Set<string>;
+  /** phone pixels -> Snap! stage units */
+  scale: number;
 };
 
 function formulaToSnap(f: Element | null, ctx: FCtx): string {
