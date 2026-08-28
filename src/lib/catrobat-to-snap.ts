@@ -351,6 +351,25 @@ function arg(brick: Element, category: string, ctx: FCtx, fallback = "0") {
   return formulaToSnap(f, ctx);
 }
 
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * Position arguments are phone pixels — scale them down to Snap!'s 480x360
+ * stage. Plain numbers are multiplied in place, expressions get a "x * scale".
+ */
+function posArg(brick: Element, category: string, ctx: FCtx, fallback = "0") {
+  const s = ctx.scale;
+  const f = formulaOf(brick, category);
+  if (!f) return `<l>${esc(String(round2((Number(fallback) || 0) * s)))}</l>`;
+  if (s === 1) return formulaToSnap(f, ctx);
+  if (text(child(f, "type")) === "NUMBER") {
+    const v = Number(num(text(child(f, "value")))) || 0;
+    return `<l>${esc(String(round2(v * s)))}</l>`;
+  }
+  return `<block s="reportVariadicProduct"><list>${formulaToSnap(f, ctx)}<l>${round2(s)}</l></list></block>`;
+}
+
+
 /* ----------------------------------------------------------------- bricks */
 
 type Ctx = FCtx & {
