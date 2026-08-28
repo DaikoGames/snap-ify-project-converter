@@ -876,6 +876,7 @@ export function convertCatrobatXml(
         costumeIndex: costumesXml.length ? 1 : 0,
         x: 0,
         y: 0,
+        scale: round2(stageScale),
       }),
     );
     idx++;
