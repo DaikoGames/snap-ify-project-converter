@@ -546,10 +546,12 @@ function simpleBrick(b: Element, type: string, ctx: Ctx): string {
       return `<block s="show"/>`;
     case "HideBrick":
       return `<block s="hide"/>`;
+    // Costumes are phone-sized bitmaps shown at `scale`, so a Catrobat
+    // "set size to 100 %" must become "set size to 100 * scale %" in Snap!.
     case "SetSizeToBrick":
-      return `<block s="setScale">${a("SIZE", "100")}</block>`;
+      return `<block s="setScale">${p("SIZE", "100")}</block>`;
     case "ChangeSizeByNBrick":
-      return `<block s="changeScale">${a("SIZE_CHANGE", "10")}</block>`;
+      return `<block s="changeScale">${p("SIZE_CHANGE", "10")}</block>`;
     case "SetTransparencyBrick":
     case "SetGhostEffectBrick":
       return `<block s="setEffect"><l><option>ghost</option></l>${a("TRANSPARENCY", "0")}</block>`;
