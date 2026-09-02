@@ -330,9 +330,9 @@ function formulaToSnap(f: Element | null, ctx: FCtx): string {
         case "COMPASS_DIRECTION":
           return `<block s="reportAtan2"><block s="reportMouseX"/><block s="reportMouseY"/></block>`;
         case "SCREEN_WIDTH":
-          return `<l>480</l>`;
+          return `<l>${ctx.screenW || 480}</l>`;
         case "SCREEN_HEIGHT":
-          return `<l>360</l>`;
+          return `<l>${ctx.screenH || 360}</l>`;
         default:
           if (SENSORS[value]) return `<block s="${SENSORS[value]}"/>`;
           warn(`Unsupported sensor "${value}" (device sensor has no Snap! equivalent)`);
@@ -737,6 +737,8 @@ export function convertCatrobatXml(
     vars: new Set<string>(),
     lists: new Set<string>(),
     scale: 1,
+    screenW: 0,
+    screenH: 0,
   };
 
   const doc = new DOMParser().parseFromString(xmlText, "text/xml");
@@ -755,6 +757,8 @@ export function convertCatrobatXml(
   const stageScale =
     screenW > 0 && screenH > 0 ? Math.min(480 / screenW, 360 / screenH) : 1;
   ctx.scale = stageScale;
+  ctx.screenW = screenW;
+  ctx.screenH = screenH;
   if (stageScale !== 1)
     ctx.warn(
       `Project screen is ${screenW}x${screenH}; positions and costumes were scaled by ${round2(stageScale)} to fit Snap!'s 480x360 stage.`,
