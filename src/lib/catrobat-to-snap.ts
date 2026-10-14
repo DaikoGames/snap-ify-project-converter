@@ -977,8 +977,47 @@ function baseOf(path: string) {
   return (path.split("/").pop() ?? path).toLowerCase();
 }
 
+/** Reads PNG / GIF / JPEG / BMP / WEBP dimensions from raw bytes (no browser needed). */
+export function measureImageBytes(b: Uint8Array): { width: number; height: number } {
+  const u16be = (i: number) => (b[i]! << 8) | b[i + 1]!;
+  const u16le = (i: number) => b[i]! | (b[i + 1]! << 8);
+  const u32be = (i: number) => ((b[i]! << 24) >>> 0) + (b[i + 1]! << 16) + (b[i + 2]! << 8) + b[i + 3]!;
+  const u32le = (i: number) => b[i]! + (b[i + 1]! << 8) + (b[i + 2]! << 16) + ((b[i + 3]! << 24) >>> 0);
+  if (b.length > 24 && b[0] === 0x89 && b[1] === 0x50) return { width: u32be(16), height: u32be(20) };
+  if (b.length > 10 && b[0] === 0x47 && b[1] === 0x49) return { width: u16le(6), height: u16le(8) };
+  if (b.length > 26 && b[0] === 0x42 && b[1] === 0x4d)
+    return { width: u32le(18), height: Math.abs(u32le(22) | 0) };
+  if (b.length > 30 && b[0] === 0x52 && b[8] === 0x57) {
+    const fmt = String.fromCharCode(b[12]!, b[13]!, b[14]!, b[15]!);
+    if (fmt === "VP8 ") return { width: u16le(26) & 0x3fff, height: u16le(28) & 0x3fff };
+    if (fmt === "VP8L") {
+      const v = u32le(21);
+      return { width: (v & 0x3fff) + 1, height: ((v >> 14) & 0x3fff) + 1 };
+    }
+    if (fmt === "VP8X")
+      return { width: 1 + (b[24]! | (b[25]! << 8) | (b[26]! << 16)), height: 1 + (b[27]! | (b[28]! << 8) | (b[29]! << 16)) };
+  }
+  if (b[0] === 0xff && b[1] === 0xd8) {
+    let i = 2;
+    while (i + 9 < b.length) {
+      if (b[i] !== 0xff) { i++; continue; }
+      const m = b[i + 1]!;
+      if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc)
+        return { width: u16be(i + 7), height: u16be(i + 5) };
+      i += 2 + u16be(i + 2);
+    }
+  }
+  return { width: 0, height: 0 };
+}
+
 async function measureImage(dataUrl: string): Promise<{ width: number; height: number }> {
-  if (typeof Image === "undefined") return { width: 0, height: 0 };
+  if (typeof Image === "undefined") {
+    const b64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
+    const bin = atob(b64);
+    const bytes = new Uint8Array(Math.min(bin.length, 65536));
+    for (let i = 0; i < bytes.length; i++) bytes[i] = bin.charCodeAt(i);
+    return measureImageBytes(bytes);
+  }
   return await new Promise((resolve) => {
     const img = new Image();
     img.onload = () => resolve({ width: img.naturalWidth || 0, height: img.naturalHeight || 0 });
